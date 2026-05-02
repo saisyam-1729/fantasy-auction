@@ -27,6 +27,7 @@ interface Player {
   player_type: string
   base_price: number
   image_url: string | null
+  team?: string | null
   status: string
   sold_price?: number
   sold_to?: string
@@ -47,6 +48,7 @@ interface PlayerInventoryRow {
   player_type: string
   base_price: number
   image_url: string | null
+  team?: string | null
 }
 
 /** PostgREST embed types often infer many-to-one as T | T[] */
@@ -73,6 +75,8 @@ export default function RoomPage() {
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [activeTab, setActiveTab] = useState<'auction' | 'squad' | 'leaderboard' | 'players'>('auction')
   const [bidMessage, setBidMessage] = useState('')
+  /** Set once at load: room creator or DB is_admin (survives ref edge cases when merging room_users). */
+  const [canUseHostControls, setCanUseHostControls] = useState(false)
 
   /** Avoid stale `currentUser` in realtime `fetchRoomUsers` (effect closure). */
   const myRoomUserIdRef = useRef<string | null>(null)
@@ -160,7 +164,12 @@ export default function RoomPage() {
       roomAdminAuthUserIdRef.current = room.admin_user_id != null ? String(room.admin_user_id) : null
       myRoomUserIdRef.current = roomUser.id
 
-      setCurrentUser(mergeRoomUserRow(roomUser as RoomUser))
+      const ru = roomUser as RoomUser
+      const isRoomCreator =
+        room.admin_user_id != null && String(room.admin_user_id) === String(user.id)
+      setCanUseHostControls(Boolean(ru.is_admin) || isRoomCreator)
+
+      setCurrentUser(mergeRoomUserRow(ru))
       
       await Promise.all([
         fetchRoomUsers(id),
@@ -219,7 +228,8 @@ export default function RoomPage() {
               player_name,
               player_type,
               base_price,
-              image_url
+              image_url,
+              team
             )
           `)
           .eq('id', data.current_player_id)
@@ -238,6 +248,7 @@ export default function RoomPage() {
               player_type: inv.player_type,
               base_price: inv.base_price,
               image_url: inv.image_url,
+              team: inv.team ?? null,
               status: player.status,
               sold_price: player.sold_price
             })
@@ -266,7 +277,8 @@ export default function RoomPage() {
           player_name,
           player_type,
           base_price,
-          image_url
+          image_url,
+          team
         )
       `)
       .eq('room_id', targetRoomId)
@@ -301,6 +313,7 @@ export default function RoomPage() {
           player_type: inv.player_type,
           base_price: inv.base_price,
           image_url: inv.image_url,
+          team: inv.team ?? null,
           status: p.status,
           sold_price: p.sold_price || undefined,
           sold_to: soldToName
@@ -310,7 +323,8 @@ export default function RoomPage() {
       setAllPlayers(playerList.filter((p): p is NonNullable<typeof p> => p != null))
     }
 
-    if (!currentUser?.id) return
+    const squadRoomUserId = myRoomUserIdRef.current
+    if (!squadRoomUserId) return
 
     const { data: squadData } = await supabase
       .from('user_squads')
@@ -318,7 +332,7 @@ export default function RoomPage() {
         purchase_price,
         player_id
       `)
-      .eq('room_user_id', currentUser.id)
+      .eq('room_user_id', squadRoomUserId)
 
     if (squadData && squadData.length > 0) {
       const playerIds = squadData.map(s => s.player_id)
@@ -331,7 +345,8 @@ export default function RoomPage() {
             player_name,
             player_type,
             base_price,
-            image_url
+            image_url,
+            team
           )
         `)
         .in('id', playerIds)
@@ -349,6 +364,7 @@ export default function RoomPage() {
               player_type: inv.player_type,
               base_price: inv.base_price,
               image_url: inv.image_url,
+              team: inv.team ?? null,
               status: 'SOLD' as const,
               sold_price: squadData.find(s => s.player_id === p.id)?.purchase_price
             }]
@@ -427,13 +443,43 @@ export default function RoomPage() {
     setCurrentUser(mergeRoomUserRow({ ...currentUser, ready_to_start: next }))
   }
 
+  async function handleRestartAuction() {
+    if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
+    const ok = window.confirm(
+      'Reset this room’s auction completely?\n\n' +
+        '• Stops the live auction\n' +
+        '• All players go back to UNSOLD\n' +
+        '• Clears squads, spends, and bid history for this room\n\n' +
+        'Everyone stays in the room; you can start again when ready.'
+    )
+    if (!ok) return
+
+    const { error } = await supabase.rpc('restart_room_auction', { p_room_id: roomId })
+    if (error) {
+      alert(
+        'Could not reset: ' +
+          error.message +
+          '\n\nRun supabase/restart_room_auction.sql in the Supabase SQL Editor if this function is missing.'
+      )
+      return
+    }
+
+    consensusAutoStartRef.current = false
+    await Promise.all([
+      fetchAuctionState(roomId),
+      fetchRoomUsers(roomId),
+      fetchAllPlayers(roomId),
+    ])
+  }
+
   async function placeBid(amount: number) {
-    if (!currentUser || !auctionState || !currentPlayer) return
+    if (!currentUser || !auctionState || !currentPlayer || !roomId) return
 
     setBidMessage('')
 
+    const newBid = auctionState.current_bid + amount
     const remaining = currentUser.budget - currentUser.spent
-    if (amount > remaining) {
+    if (newBid > remaining) {
       setBidMessage('Insufficient funds!')
       return
     }
@@ -448,30 +494,18 @@ export default function RoomPage() {
       return
     }
 
-    const newBid = auctionState.current_bid + amount
-
-    const { error } = await supabase
-      .from('live_auction_state')
-      .update({
-        current_bid: newBid,
-        top_bidder_id: currentUser.id,
-        last_bid_time: new Date().toISOString(),
-        timer_type: 'SOLD_TIMER'
-      })
-      .eq('room_id', roomId)
+    const { error } = await supabase.rpc('place_auction_bid', {
+      p_room_id: roomId,
+      p_increment: amount,
+    })
 
     if (error) {
-      setBidMessage('Bidding error: ' + error.message)
-    } else {
-      setBidMessage('Bid placed successfully!')
+      setBidMessage(error.message || 'Bidding error')
+      return
     }
 
-    await supabase.from('bid_history').insert({
-      room_id: roomId,
-      player_id: currentPlayer.id,
-      user_id: currentUser.id,
-      amount: newBid
-    })
+    setBidMessage('Bid placed successfully!')
+    await fetchAuctionState(roomId)
   }
 
   function formatMoney(amount: number) {
@@ -490,6 +524,13 @@ export default function RoomPage() {
   fetchRoomUsersRef.current = fetchRoomUsers
   const fetchAuctionStateRef = useRef(fetchAuctionState)
   fetchAuctionStateRef.current = fetchAuctionState
+  const fetchAllPlayersRef = useRef(fetchAllPlayers)
+  fetchAllPlayersRef.current = fetchAllPlayers
+
+  const auctionStateRef = useRef<AuctionState | null>(null)
+  auctionStateRef.current = auctionState
+
+  const finalizeRpcWarnedRef = useRef(false)
 
   const consensusKey = useMemo(() => {
     const sig = allUsers
@@ -579,25 +620,71 @@ export default function RoomPage() {
   }, [roomId, loading, auctionState?.is_active])
 
   useEffect(() => {
-    if (!auctionState?.is_active || !auctionState.start_time) {
+    const s = auctionStateRef.current
+    if (!s?.is_active || !s.start_time) {
       setTimeLeft(0)
       return
     }
 
     const interval = setInterval(() => {
+      const cur = auctionStateRef.current
+      if (!cur?.is_active) return
       const now = new Date().getTime()
 
-      if (auctionState.timer_type === 'SOLD_TIMER' && auctionState.last_bid_time) {
-        const elapsed = (now - new Date(auctionState.last_bid_time).getTime()) / 1000
+      if (cur.timer_type === 'SOLD_TIMER' && cur.last_bid_time) {
+        const elapsed = (now - new Date(cur.last_bid_time).getTime()) / 1000
         setTimeLeft(Math.max(0, 15 - elapsed))
-      } else if (auctionState.timer_type === 'UNSOLD_TIMER' && auctionState.start_time) {
-        const elapsed = (now - new Date(auctionState.start_time).getTime()) / 1000
+      } else if (cur.timer_type === 'UNSOLD_TIMER' && cur.start_time) {
+        const elapsed = (now - new Date(cur.start_time).getTime()) / 1000
         setTimeLeft(Math.max(0, 45 - elapsed))
       }
     }, 100)
 
     return () => clearInterval(interval)
   }, [auctionState])
+
+  /** Realtime can lag; RPC advances hammer; polling keeps bids/timer in sync. */
+  useEffect(() => {
+    if (!roomId || loading) return
+    if (!auctionState?.is_active) return
+
+    const tick = () => {
+      void (async () => {
+        const id = roomId
+        if (!id) return
+        try {
+          const { data, error } = await supabase.rpc('finalize_auction_if_expired', {
+            p_room_id: id,
+          })
+          if (error) {
+            if (!finalizeRpcWarnedRef.current) {
+              finalizeRpcWarnedRef.current = true
+              console.warn(
+                '[auction] finalize_auction_if_expired:',
+                error.message,
+                '— Run supabase/finalize_auction_timer.sql in the Supabase SQL Editor.'
+              )
+            }
+          } else if (data === true) {
+            await Promise.all([
+              fetchAuctionStateRef.current(id),
+              fetchRoomUsersRef.current(id),
+              fetchAllPlayersRef.current(id),
+            ])
+            return
+          }
+        } catch (e) {
+          console.warn('[auction] finalize tick', e)
+        }
+        await fetchAuctionStateRef.current(id)
+      })()
+    }
+
+    tick()
+    const i = window.setInterval(tick, 1500)
+    return () => window.clearInterval(i)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- supabase client stable; poll when auction on
+  }, [roomId, loading, auctionState?.is_active])
 
   if (loading) {
     return (
@@ -611,27 +698,51 @@ export default function RoomPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
       <div className="max-w-7xl mx-auto mb-6">
         <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-4">
-          <div className="flex justify-between items-center flex-wrap gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-white">🏏 Auction Room</h1>
-              <p className="text-slate-300 text-sm">
-                {allUsers.length} Players • {currentUser?.display_name}
-              </p>
-            </div>
-            <div className="flex gap-4 items-center">
-              <div className="text-right">
-                <div className="text-xs text-slate-400">Your Budget</div>
-                <div className="text-xl font-bold text-green-400">
-                  {formatMoney((currentUser?.budget || 0) - (currentUser?.spent || 0))}
-                </div>
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-white">🏏 Auction Room</h1>
+                <p className="text-slate-300 text-sm flex flex-wrap items-center gap-2">
+                  <span>
+                    {allUsers.length} Players • {currentUser?.display_name}
+                  </span>
+                  {(currentUser?.is_admin || canUseHostControls) && (
+                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40">
+                      Host
+                    </span>
+                  )}
+                </p>
               </div>
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/50 rounded-xl hover:bg-red-500 hover:text-white transition"
-              >
-                Leave
-              </button>
+              <div className="flex gap-3 items-center flex-wrap justify-end">
+                <div className="text-right">
+                  <div className="text-xs text-slate-400">Your Budget</div>
+                  <div className="text-xl font-bold text-green-400">
+                    {formatMoney((currentUser?.budget || 0) - (currentUser?.spent || 0))}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push('/dashboard')}
+                  className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/50 rounded-xl hover:bg-red-500 hover:text-white transition"
+                >
+                  Leave
+                </button>
+              </div>
             </div>
+            {(currentUser?.is_admin || canUseHostControls) && (
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10">
+                <p className="text-xs text-slate-400 max-w-xl">
+                  Host tools: reset clears this room&apos;s bids, squads, and sold status so you can run again.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleRestartAuction()}
+                  className="shrink-0 px-4 py-2 bg-amber-950/60 text-amber-100 border border-amber-500/70 rounded-xl hover:bg-amber-900/80 transition text-sm font-semibold"
+                >
+                  Reset auction
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -740,6 +851,7 @@ export default function RoomPage() {
                     {currentPlayer.player_name}
                   </h2>
                   <div className="text-center text-slate-300 mb-8">
+                    {currentPlayer.team ? `${currentPlayer.team} · ` : ''}
                     {currentPlayer.player_type} • Base: {formatMoney(currentPlayer.base_price)}
                   </div>
 
@@ -840,7 +952,9 @@ export default function RoomPage() {
                       />
                       <div className="flex-1">
                         <div className="font-bold text-white">{player.player_name}</div>
-                        <div className="text-xs text-slate-400">{player.player_type}</div>
+                        <div className="text-xs text-slate-400">
+                          {[player.team, player.player_type].filter(Boolean).join(' · ') || player.player_type}
+                        </div>
                       </div>
                     </div>
                     <div className="mt-2 pt-2 border-t border-slate-700 text-right">
@@ -896,6 +1010,7 @@ export default function RoomPage() {
                 <thead className="bg-slate-800 text-slate-400">
                   <tr>
                     <th className="p-3 text-left">Player</th>
+                    <th className="p-3 text-left">Team</th>
                     <th className="p-3 text-left">Type</th>
                     <th className="p-3 text-left">Status</th>
                     <th className="p-3 text-right">Price</th>
@@ -914,6 +1029,7 @@ export default function RoomPage() {
                           <span className="text-white">{player.player_name}</span>
                         </div>
                       </td>
+                      <td className="p-3 text-slate-300">{player.team || '—'}</td>
                       <td className="p-3 text-slate-300">{player.player_type}</td>
                       <td className="p-3">
                         <span className={`text-xs px-2 py-1 rounded ${
