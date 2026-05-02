@@ -694,6 +694,8 @@ export default function RoomPage() {
     )
   }
 
+  const showHostTools = Boolean(currentUser?.is_admin || canUseHostControls)
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
       <div className="max-w-7xl mx-auto mb-6">
@@ -769,6 +771,22 @@ export default function RoomPage() {
       <div className="max-w-7xl mx-auto">
         {activeTab === 'auction' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {showHostTools && (
+              <div className="lg:col-span-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/35 bg-amber-950/35 px-4 py-3">
+                <p className="text-xs text-amber-100/90 max-w-2xl">
+                  <strong className="text-amber-200">Host:</strong> full reset is also under the top header.
+                  Use <strong>Reset auction</strong> to stop the live round, unsell all lots, clear squads and bid
+                  history for this room.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleRestartAuction()}
+                  className="shrink-0 px-4 py-2 bg-amber-950/60 text-amber-100 border border-amber-500/70 rounded-xl hover:bg-amber-900/80 transition text-sm font-semibold"
+                >
+                  Reset auction
+                </button>
+              </div>
+            )}
             <div className="lg:col-span-2 backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
               {!auctionState?.is_active && (
                 <div className="text-center py-10 px-2">
@@ -969,7 +987,18 @@ export default function RoomPage() {
 
         {activeTab === 'leaderboard' && (
           <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
-            <h2 className="text-2xl font-bold text-white mb-6">Leaderboard</h2>
+            <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+              <h2 className="text-2xl font-bold text-white">Leaderboard</h2>
+              {showHostTools && (
+                <button
+                  type="button"
+                  onClick={() => void handleRestartAuction()}
+                  className="shrink-0 px-4 py-2 bg-amber-950/60 text-amber-100 border border-amber-500/70 rounded-xl hover:bg-amber-900/80 transition text-sm font-semibold"
+                >
+                  Reset auction
+                </button>
+              )}
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-800 text-slate-400">
