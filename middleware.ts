@@ -1,7 +1,11 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { getPublicSupabaseConfig } from '@/lib/supabase/env'
 
+/**
+ * Edge middleware must never throw: Vercel returns MIDDLEWARE_INVOCATION_FAILED (500).
+ * Missing NEXT_PUBLIC_* → skip session refresh (pages still need env to work).
+ * Transient Supabase/network errors → continue with the current response.
+ */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -9,20 +13,22 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  const { url, anonKey } = getPublicSupabaseConfig()
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? ''
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? ''
+  if (!url || !anonKey) {
+    return response
+  }
 
-  const supabase = createServerClient(
-    url,
-    anonKey,
-    {
+  try {
+    const supabase = createServerClient(url, anonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
+          cookiesToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value)
-          )
+          })
           response = NextResponse.next({
             request: {
               headers: request.headers,
@@ -33,10 +39,12 @@ export async function middleware(request: NextRequest) {
           })
         },
       },
-    }
-  )
+    })
 
-  await supabase.auth.getUser()
+    await supabase.auth.getUser()
+  } catch (err) {
+    console.error('[middleware] Supabase session refresh failed:', err)
+  }
 
   return response
 }
