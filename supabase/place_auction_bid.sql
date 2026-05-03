@@ -1,4 +1,7 @@
 -- =============================================================================
+-- Superseded by `auction_manual_and_filters.sql` (same function + manual flow).
+-- Prefer running that file once. This file kept for reference only.
+-- =============================================================================
 -- Atomic bid: avoids lost updates when two users bid at once
 -- Run in Supabase: SQL Editor → paste → Run once
 --

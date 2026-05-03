@@ -51,6 +51,10 @@ interface PlayerInventoryRow {
   team?: string | null
 }
 
+type AuctionSortMode = 'created_asc' | 'base_price_asc' | 'base_price_desc'
+
+const FILTER_PLAYER_TYPES = ['BAT', 'BOWL', 'AR', 'WK', 'ALL'] as const
+
 /** PostgREST embed types often infer many-to-one as T | T[] */
 function inventoryRow(
   inv: PlayerInventoryRow | PlayerInventoryRow[] | null | undefined
@@ -70,13 +74,18 @@ export default function RoomPage() {
   const [allUsers, setAllUsers] = useState<RoomUser[]>([])
   const [auctionState, setAuctionState] = useState<AuctionState | null>(null)
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
-  const [timeLeft, setTimeLeft] = useState(0)
   const [mySquad, setMySquad] = useState<Player[]>([])
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [activeTab, setActiveTab] = useState<'auction' | 'squad' | 'leaderboard' | 'players'>('auction')
   const [bidMessage, setBidMessage] = useState('')
   /** Set once at load: room creator or DB is_admin (survives ref edge cases when merging room_users). */
   const [canUseHostControls, setCanUseHostControls] = useState(false)
+  /** Host lot order (saved to rooms.auction_filters). Empty hostTypes = all types. */
+  const [hostSort, setHostSort] = useState<AuctionSortMode>('created_asc')
+  const [hostTypes, setHostTypes] = useState<string[]>([])
+  const [hostMinBase, setHostMinBase] = useState('')
+  const [hostMaxBase, setHostMaxBase] = useState('')
+  const [hostFilterMessage, setHostFilterMessage] = useState('')
 
   /** Avoid stale `currentUser` in realtime `fetchRoomUsers` (effect closure). */
   const myRoomUserIdRef = useRef<string | null>(null)
@@ -121,6 +130,37 @@ export default function RoomPage() {
       }
 
       console.log('Room found:', room.room_name)
+
+      const rf = (room as { auction_filters?: unknown }).auction_filters
+      if (rf && typeof rf === 'object' && rf !== null && !Array.isArray(rf)) {
+        const f = rf as Record<string, unknown>
+        const s = f.sort
+        if (s === 'base_price_asc' || s === 'base_price_desc' || s === 'created_asc') {
+          setHostSort(s)
+        }
+        const pt = f.player_types
+        if (Array.isArray(pt)) {
+          setHostTypes(pt.map((x) => String(x)))
+        } else {
+          setHostTypes([])
+        }
+        const mn = f.min_base_price
+        setHostMinBase(
+          typeof mn === 'number' && Number.isFinite(mn)
+            ? String(mn)
+            : mn != null && mn !== ''
+              ? String(mn)
+              : ''
+        )
+        const mx = f.max_base_price
+        setHostMaxBase(
+          typeof mx === 'number' && Number.isFinite(mx)
+            ? String(mx)
+            : mx != null && mx !== ''
+              ? String(mx)
+              : ''
+        )
+      }
 
       let roomUser = null
       let attempts = 0
@@ -375,43 +415,70 @@ export default function RoomPage() {
   }
 
   async function startAuction(): Promise<boolean> {
-    const { data: unsoldPlayer } = await supabase
-      .from('room_players')
-      .select('id, player_inventory(base_price)')
-      .eq('room_id', roomId)
-      .eq('status', 'UNSOLD')
-      .limit(1)
-      .maybeSingle()
-
-    if (!unsoldPlayer) {
-      alert('No unsold players remaining!')
-      return false
-    }
-
-    const inv = inventoryRow(
-      unsoldPlayer.player_inventory as PlayerInventoryRow | PlayerInventoryRow[] | null | undefined
-    )
-    const basePrice = inv?.base_price || 2000000
-
-    const { error } = await supabase
-      .from('live_auction_state')
-      .update({
-        is_active: true,
-        current_player_id: unsoldPlayer.id,
-        current_bid: basePrice,
-        top_bidder_id: null,
-        start_time: new Date().toISOString(),
-        last_bid_time: new Date().toISOString(),
-        timer_type: 'UNSOLD_TIMER'
-      })
-      .eq('room_id', roomId)
-      .eq('is_active', false)
-
+    if (!roomId) return false
+    const { error } = await supabase.rpc('auction_start_first_lot', { p_room_id: roomId })
     if (error) {
       console.error('startAuction:', error.message)
+      alert(
+        'Could not start: ' +
+          error.message +
+          '\n\nRun supabase/auction_manual_and_filters.sql in Supabase (adds auction_start_first_lot + filters).'
+      )
       return false
     }
     return true
+  }
+
+  function toggleHostPlayerType(t: string) {
+    setHostTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+  }
+
+  async function saveHostAuctionFilters() {
+    if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
+    setHostFilterMessage('')
+    const minV = hostMinBase.trim() === '' ? null : Number(hostMinBase)
+    const maxV = hostMaxBase.trim() === '' ? null : Number(hostMaxBase)
+    if (minV != null && !Number.isFinite(minV)) {
+      setHostFilterMessage('Min base price must be a number (rupees).')
+      return
+    }
+    if (maxV != null && !Number.isFinite(maxV)) {
+      setHostFilterMessage('Max base price must be a number (rupees).')
+      return
+    }
+    if (minV != null && maxV != null && minV > maxV) {
+      setHostFilterMessage('Min base price cannot be greater than max.')
+      return
+    }
+    const payload = {
+      sort: hostSort,
+      player_types: hostTypes.length === 0 ? null : hostTypes,
+      min_base_price: minV,
+      max_base_price: maxV,
+    }
+    const { error } = await supabase.rpc('admin_set_auction_filters', {
+      p_room_id: roomId,
+      p_filters: payload,
+    })
+    if (error) {
+      setHostFilterMessage(error.message)
+      return
+    }
+    setHostFilterMessage('Saved. Next lots use this order & filters.')
+  }
+
+  async function hostHammer(action: 'sold' | 'pass') {
+    if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
+    setHostFilterMessage('')
+    const { error } = await supabase.rpc('auction_hammer_advance', {
+      p_room_id: roomId,
+      p_action: action,
+    })
+    if (error) {
+      alert(error.message)
+      return
+    }
+    await Promise.all([fetchAuctionState(roomId), fetchRoomUsers(roomId), fetchAllPlayers(roomId)])
   }
 
   async function toggleReady() {
@@ -527,11 +594,6 @@ export default function RoomPage() {
   const fetchAllPlayersRef = useRef(fetchAllPlayers)
   fetchAllPlayersRef.current = fetchAllPlayers
 
-  const auctionStateRef = useRef<AuctionState | null>(null)
-  auctionStateRef.current = auctionState
-
-  const finalizeRpcWarnedRef = useRef(false)
-
   const consensusKey = useMemo(() => {
     const sig = allUsers
       .map((u) => `${u.id}:${u.ready_to_start ? 1 : 0}`)
@@ -619,72 +681,18 @@ export default function RoomPage() {
     return () => window.clearInterval(t)
   }, [roomId, loading, auctionState?.is_active])
 
-  useEffect(() => {
-    const s = auctionStateRef.current
-    if (!s?.is_active || !s.start_time) {
-      setTimeLeft(0)
-      return
-    }
-
-    const interval = setInterval(() => {
-      const cur = auctionStateRef.current
-      if (!cur?.is_active) return
-      const now = new Date().getTime()
-
-      if (cur.timer_type === 'SOLD_TIMER' && cur.last_bid_time) {
-        const elapsed = (now - new Date(cur.last_bid_time).getTime()) / 1000
-        setTimeLeft(Math.max(0, 15 - elapsed))
-      } else if (cur.timer_type === 'UNSOLD_TIMER' && cur.start_time) {
-        const elapsed = (now - new Date(cur.start_time).getTime()) / 1000
-        setTimeLeft(Math.max(0, 45 - elapsed))
-      }
-    }, 100)
-
-    return () => clearInterval(interval)
-  }, [auctionState])
-
-  /** Realtime can lag; RPC advances hammer; polling keeps bids/timer in sync. */
+  /** Light polling while live (realtime can miss bids). */
   useEffect(() => {
     if (!roomId || loading) return
     if (!auctionState?.is_active) return
-
-    const tick = () => {
-      void (async () => {
-        const id = roomId
-        if (!id) return
-        try {
-          const { data, error } = await supabase.rpc('finalize_auction_if_expired', {
-            p_room_id: id,
-          })
-          if (error) {
-            if (!finalizeRpcWarnedRef.current) {
-              finalizeRpcWarnedRef.current = true
-              console.warn(
-                '[auction] finalize_auction_if_expired:',
-                error.message,
-                '— Run supabase/finalize_auction_timer.sql in the Supabase SQL Editor.'
-              )
-            }
-          } else if (data === true) {
-            await Promise.all([
-              fetchAuctionStateRef.current(id),
-              fetchRoomUsersRef.current(id),
-              fetchAllPlayersRef.current(id),
-            ])
-            return
-          }
-        } catch (e) {
-          console.warn('[auction] finalize tick', e)
-        }
-        await fetchAuctionStateRef.current(id)
-      })()
-    }
-
-    tick()
-    const i = window.setInterval(tick, 1500)
+    const id = roomId
+    const i = window.setInterval(() => {
+      void fetchAuctionStateRef.current(id)
+    }, 2500)
     return () => window.clearInterval(i)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- supabase client stable; poll when auction on
   }, [roomId, loading, auctionState?.is_active])
+
+  const showHostTools = Boolean(currentUser?.is_admin || canUseHostControls)
 
   if (loading) {
     return (
@@ -693,8 +701,6 @@ export default function RoomPage() {
       </div>
     )
   }
-
-  const showHostTools = Boolean(currentUser?.is_admin || canUseHostControls)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
@@ -812,6 +818,87 @@ export default function RoomPage() {
                           })()}
                   </p>
 
+                  {showHostTools && (
+                    <div className="max-w-2xl mx-auto mb-8 rounded-2xl border border-amber-500/40 bg-slate-900/60 p-5 text-left">
+                      <h3 className="text-amber-200 font-bold text-sm uppercase tracking-wide mb-3">
+                        Lot order & filters (host)
+                      </h3>
+                      <p className="text-xs text-slate-400 mb-4">
+                        Only players matching the filters are offered, in the sort order. Leave types empty for
+                        everyone. Base prices are in <strong className="text-slate-300">rupees</strong> (same as
+                        the database).
+                      </p>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-xs text-slate-400 mb-1">Sort unsold lots by</label>
+                          <select
+                            value={hostSort}
+                            onChange={(e) => setHostSort(e.target.value as AuctionSortMode)}
+                            className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-white text-sm"
+                          >
+                            <option value="created_asc">Original list order</option>
+                            <option value="base_price_asc">Base price — low to high</option>
+                            <option value="base_price_desc">Base price — high to low</option>
+                          </select>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-slate-400 mb-2">Player types (optional)</span>
+                          <div className="flex flex-wrap gap-2">
+                            {FILTER_PLAYER_TYPES.map((t) => (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => toggleHostPlayerType(t)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
+                                  hostTypes.includes(t)
+                                    ? 'bg-amber-500/30 border-amber-400 text-amber-100'
+                                    : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-500'
+                                }`}
+                              >
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-1">None selected = all types</p>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-400 mb-1">Min base price (₹)</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={hostMinBase}
+                            onChange={(e) => setHostMinBase(e.target.value)}
+                            placeholder="e.g. 2000000"
+                            className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-white text-sm placeholder:text-slate-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-400 mb-1">Max base price (₹)</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={hostMaxBase}
+                            onChange={(e) => setHostMaxBase(e.target.value)}
+                            placeholder="optional cap"
+                            className="w-full rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-white text-sm placeholder:text-slate-600"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void saveHostAuctionFilters()}
+                          className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-900 text-sm font-bold"
+                        >
+                          Save filters
+                        </button>
+                        {hostFilterMessage ? (
+                          <span className="text-xs text-amber-200/90">{hostFilterMessage}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="max-w-md mx-auto text-left mb-8 space-y-2">
                     {allUsers.map((u) => (
                       <div
@@ -841,18 +928,37 @@ export default function RoomPage() {
 
               {auctionState?.is_active && currentPlayer && (
                 <div>
-                  <div className="flex justify-between items-start mb-6">
+                  <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
                     <div className="bg-red-500 text-white px-4 py-1 rounded-full text-sm font-bold animate-pulse">
                       LIVE
                     </div>
-                    <div className="text-right">
-                      <div className="text-xs text-slate-400 uppercase">
-                        {auctionState.timer_type === 'SOLD_TIMER' ? 'Selling in' : 'Unsold in'}
+                    {showHostTools && (
+                      <div className="flex flex-wrap gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void hostHammer('sold')}
+                          disabled={!auctionState.top_bidder_id}
+                          className="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed border border-green-400/50"
+                        >
+                          Hammer — sell to high bid
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                'Pass this player? No sale — next lot (or end) using your filters.'
+                              )
+                            )
+                              return
+                            void hostHammer('pass')
+                          }}
+                          className="px-4 py-2 rounded-xl bg-slate-600 hover:bg-slate-500 text-white text-sm font-semibold border border-slate-400/50"
+                        >
+                          Pass — no sale
+                        </button>
                       </div>
-                      <div className="text-3xl font-bold text-red-400 font-mono">
-                        {Math.ceil(timeLeft)}s
-                      </div>
-                    </div>
+                    )}
                   </div>
 
                   <div className="flex justify-center mb-6">

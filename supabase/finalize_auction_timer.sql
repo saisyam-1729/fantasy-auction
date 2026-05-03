@@ -1,4 +1,7 @@
 -- =============================================================================
+-- DEPRECATED: timer-based flow removed. Use `auction_manual_and_filters.sql`
+-- (auction_hammer_advance + host controls). This file is kept for reference.
+-- =============================================================================
 -- Hammer / pass when auction timers expire (fixes "timer runs but nothing happens")
 -- Run in Supabase: SQL Editor → paste → Run once
 --
