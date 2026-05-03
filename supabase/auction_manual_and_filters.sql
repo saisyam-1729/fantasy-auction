@@ -17,7 +17,7 @@ ALTER TABLE public.rooms
   }'::jsonb;
 
 COMMENT ON COLUMN public.rooms.auction_filters IS
-  'sort: created_asc | base_price_asc | base_price_desc. player_types: json array of strings or null/empty = all. min/max_base_price: rupees (bigint as json number).';
+  'sort: created_asc (= stable room row order by inventory id) | base_price_asc | base_price_desc. player_types: json array or null/empty = all. min/max_base_price in rupees.';
 
 -- Drop old timer-based finalizer (optional; safe if missing)
 DROP FUNCTION IF EXISTS public.finalize_auction_if_expired(uuid);
@@ -57,7 +57,7 @@ BEGIN
         NOT (af ? 'max_base_price') OR af->>'max_base_price' IS NULL OR af->>'max_base_price' = 'null'
         OR pi.base_price <= (af->>'max_base_price')::bigint
       )
-    ORDER BY pi.base_price ASC, rp.created_at ASC
+    ORDER BY pi.base_price ASC, rp.player_inventory_id ASC, rp.id ASC
     LIMIT 1;
     RETURN;
   END IF;
@@ -84,7 +84,7 @@ BEGIN
         NOT (af ? 'max_base_price') OR af->>'max_base_price' IS NULL OR af->>'max_base_price' = 'null'
         OR pi.base_price <= (af->>'max_base_price')::bigint
       )
-    ORDER BY pi.base_price DESC, rp.created_at ASC
+    ORDER BY pi.base_price DESC, rp.player_inventory_id ASC, rp.id ASC
     LIMIT 1;
     RETURN;
   END IF;
@@ -110,7 +110,7 @@ BEGIN
       NOT (af ? 'max_base_price') OR af->>'max_base_price' IS NULL OR af->>'max_base_price' = 'null'
       OR pi.base_price <= (af->>'max_base_price')::bigint
     )
-  ORDER BY rp.created_at ASC
+  ORDER BY rp.player_inventory_id ASC, rp.id ASC
   LIMIT 1;
 END;
 $$;
