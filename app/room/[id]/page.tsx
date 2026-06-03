@@ -35,12 +35,20 @@ interface Player {
 
 interface AuctionState {
   is_active: boolean
+  is_paused: boolean
   current_player_id: string | null
   current_bid: number
   top_bidder_id: string | null
   start_time: string | null
   last_bid_time: string | null
   timer_type: string | null
+}
+
+interface BidHistoryEntry {
+  id: string
+  amount: number
+  created_at: string
+  display_name: string
 }
 
 interface PlayerInventoryRow {
@@ -78,6 +86,12 @@ export default function RoomPage() {
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [activeTab, setActiveTab] = useState<'auction' | 'squad' | 'leaderboard' | 'players'>('auction')
   const [bidMessage, setBidMessage] = useState('')
+  const [countdown, setCountdown] = useState<number | null>(null)
+  const [bidHistory, setBidHistory] = useState<BidHistoryEntry[]>([])
+  const [upcomingLots, setUpcomingLots] = useState<Player[]>([])
+  const [playerSearch, setPlayerSearch] = useState('')
+  const [playerStatusFilter, setPlayerStatusFilter] = useState('ALL')
+  const [rejoinedActive, setRejoinedActive] = useState(false)
   /** Set once at load: room creator or DB is_admin (survives ref edge cases when merging room_users). */
   const [canUseHostControls, setCanUseHostControls] = useState(false)
   /** Host lot order (saved to rooms.auction_filters). Empty hostTypes = all types. */
@@ -216,6 +230,18 @@ export default function RoomPage() {
         fetchAuctionState(id),
         fetchAllPlayers(id)
       ])
+
+      // If auction is already live, load bid history and show rejoin banner
+      const { data: las } = await supabase
+        .from('live_auction_state')
+        .select('is_active, current_player_id')
+        .eq('room_id', id)
+        .maybeSingle()
+      if (las?.is_active && las.current_player_id) {
+        await fetchBidHistory(las.current_player_id)
+        setRejoinedActive(true)
+        setTimeout(() => setRejoinedActive(false), 5000)
+      }
       
       setLoading(false)
 
@@ -255,7 +281,11 @@ export default function RoomPage() {
       .maybeSingle()
 
     if (data) {
-      setAuctionState(data)
+      setAuctionState(prev => {
+        // When lot changes, clear history so it refills fresh
+        if (prev?.current_player_id !== data.current_player_id) setBidHistory([])
+        return data
+      })
       
       if (data.current_player_id) {
         const { data: player } = await supabase
@@ -431,6 +461,58 @@ export default function RoomPage() {
     return true
   }
 
+  async function fetchBidHistory(playerId: string) {
+    const { data } = await supabase
+      .from('bid_history')
+      .select('id, amount, created_at, user_id')
+      .eq('player_id', playerId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    if (!data || data.length === 0) {
+      setBidHistory([])
+      return
+    }
+
+    const userIds = [...new Set(data.map(b => b.user_id))]
+    const { data: usersData } = await supabase
+      .from('room_users')
+      .select('id, display_name')
+      .in('id', userIds)
+    const nameMap: Record<string, string> = {}
+    if (usersData) usersData.forEach(u => { nameMap[u.id] = u.display_name })
+
+    setBidHistory(data.map(b => ({
+      id: b.id,
+      amount: b.amount,
+      created_at: b.created_at,
+      display_name: nameMap[b.user_id] || 'Unknown',
+    })))
+  }
+
+  function computeUpcomingLots(
+    players: Player[],
+    currentPlayerId: string | null,
+    sort: AuctionSortMode,
+    types: string[],
+    minBase: string,
+    maxBase: string
+  ) {
+    const minV = minBase.trim() === '' ? null : Number(minBase)
+    const maxV = maxBase.trim() === '' ? null : Number(maxBase)
+    let pool = players.filter(p => {
+      if (p.status !== 'UNSOLD') return false
+      if (p.id === currentPlayerId) return false
+      if (types.length > 0 && !types.includes(p.player_type)) return false
+      if (minV != null && Number.isFinite(minV) && p.base_price < minV) return false
+      if (maxV != null && Number.isFinite(maxV) && p.base_price > maxV) return false
+      return true
+    })
+    if (sort === 'base_price_asc') pool = pool.sort((a, b) => a.base_price - b.base_price)
+    else if (sort === 'base_price_desc') pool = pool.sort((a, b) => b.base_price - a.base_price)
+    setUpcomingLots(pool.slice(0, 5))
+  }
+
   function toggleHostPlayerType(t: string) {
     setHostTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
   }
@@ -467,6 +549,23 @@ export default function RoomPage() {
       return
     }
     setHostFilterMessage('Saved. Next lots use this order & filters.')
+  }
+
+  async function hostPauseResume(paused: boolean) {
+    if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
+    const { error } = await supabase.rpc('auction_set_paused', {
+      p_room_id: roomId,
+      p_paused: paused,
+    })
+    if (error) {
+      alert(
+        (paused ? 'Could not pause: ' : 'Could not resume: ') +
+          error.message +
+          '\n\nRun supabase/auction_pause.sql in the Supabase SQL Editor.'
+      )
+      return
+    }
+    await fetchAuctionState(roomId)
   }
 
   async function hostHammer(action: 'sold' | 'pass') {
@@ -597,6 +696,8 @@ export default function RoomPage() {
   fetchAuctionStateRef.current = fetchAuctionState
   const fetchAllPlayersRef = useRef(fetchAllPlayers)
   fetchAllPlayersRef.current = fetchAllPlayers
+  const fetchBidHistoryRef = useRef(fetchBidHistory)
+  fetchBidHistoryRef.current = fetchBidHistory
 
   const consensusKey = useMemo(() => {
     const sig = allUsers
@@ -654,10 +755,14 @@ export default function RoomPage() {
         schema: 'public',
         table: 'live_auction_state',
         filter: `room_id=eq.${roomId}`
-      }, () => {
+      }, (payload) => {
         void fetchAuctionStateRef.current(roomId)
         // Refresh player/squad data so non-host users see sold players immediately
         void fetchAllPlayersRef.current(roomId)
+        // Refresh bid history for the current player
+        const newRecord = (payload as { new?: { current_player_id?: string } }).new
+        const pid = newRecord?.current_player_id
+        if (pid) void fetchBidHistoryRef.current(pid)
       })
       .on('postgres_changes', {
         event: '*',
@@ -674,6 +779,19 @@ export default function RoomPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- channel per roomId; handlers use refs
   }, [roomId])
+
+  /** Recompute upcoming lots whenever player list or auction lot changes. */
+  useEffect(() => {
+    computeUpcomingLots(
+      allPlayers,
+      auctionState?.current_player_id ?? null,
+      hostSort,
+      hostTypes,
+      hostMinBase,
+      hostMaxBase
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allPlayers, auctionState?.current_player_id, hostSort, hostTypes, hostMinBase, hostMaxBase])
 
   /** Backup if Realtime publication is missing: still sync lobby every few seconds. */
   useEffect(() => {
@@ -697,6 +815,25 @@ export default function RoomPage() {
     }, 2500)
     return () => window.clearInterval(i)
   }, [roomId, loading, auctionState?.is_active])
+
+  const BID_TIMEOUT_SECONDS = 30
+
+  /** Countdown timer: counts down from BID_TIMEOUT_SECONDS after last bid. Freezes when paused. */
+  useEffect(() => {
+    if (!auctionState?.is_active || !auctionState.last_bid_time) {
+      setCountdown(null)
+      return
+    }
+    if (auctionState.is_paused) return  // freeze — don't clear, just stop ticking
+    function tick() {
+      const elapsed = Math.floor((Date.now() - new Date(auctionState!.last_bid_time!).getTime()) / 1000)
+      const remaining = Math.max(0, BID_TIMEOUT_SECONDS - elapsed)
+      setCountdown(remaining)
+    }
+    tick()
+    const i = window.setInterval(tick, 1000)
+    return () => window.clearInterval(i)
+  }, [auctionState?.is_active, auctionState?.is_paused, auctionState?.last_bid_time])
 
   const showHostTools = Boolean(currentUser?.is_admin || canUseHostControls)
 
@@ -760,6 +897,15 @@ export default function RoomPage() {
           </div>
         </div>
       </div>
+
+      {rejoinedActive && (
+        <div className="max-w-7xl mx-auto mb-4">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-blue-500/20 border border-blue-400/40 text-blue-200 text-sm font-medium">
+            <span>🔄</span>
+            <span>You rejoined an active auction — bidding is live. Check the current lot above.</span>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto mb-6 flex gap-2 overflow-x-auto">
         {(['auction', 'squad', 'leaderboard', 'players'] as const).map(tab => (
@@ -954,16 +1100,53 @@ export default function RoomPage() {
               {auctionState?.is_active && currentPlayer && (
                 <div>
                   <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
-                    <div className="bg-red-500 text-white px-4 py-1 rounded-full text-sm font-bold animate-pulse">
-                      LIVE
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {auctionState.is_paused ? (
+                        <div className="bg-amber-500 text-slate-900 px-4 py-1 rounded-full text-sm font-bold">
+                          ⏸ PAUSED
+                        </div>
+                      ) : (
+                        <div className="bg-red-500 text-white px-4 py-1 rounded-full text-sm font-bold animate-pulse">
+                          LIVE
+                        </div>
+                      )}
+                      {countdown !== null && !auctionState.is_paused && (
+                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold border ${
+                          countdown === 0
+                            ? 'bg-green-500/20 border-green-400 text-green-300 animate-pulse'
+                            : countdown <= 10
+                              ? 'bg-red-500/20 border-red-400 text-red-300'
+                              : 'bg-slate-700/60 border-slate-500 text-slate-300'
+                        }`}>
+                          <span>{countdown === 0 ? '🔨 SOLD?' : `⏱ ${countdown}s`}</span>
+                        </div>
+                      )}
+                      {auctionState.is_paused && (
+                        <span className="text-amber-300/70 text-xs">Bidding is frozen</span>
+                      )}
                     </div>
                     {showHostTools && (
                       <div className="flex flex-wrap gap-2 justify-end">
                         <button
                           type="button"
+                          onClick={() => void hostPauseResume(!auctionState.is_paused)}
+                          className={`px-4 py-2 rounded-xl text-sm font-semibold border transition ${
+                            auctionState.is_paused
+                              ? 'bg-amber-500 hover:bg-amber-400 text-slate-900 border-amber-300'
+                              : 'bg-slate-700 hover:bg-slate-600 text-white border-slate-500'
+                          }`}
+                        >
+                          {auctionState.is_paused ? '▶ Resume' : '⏸ Pause'}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => void hostHammer('sold')}
-                          disabled={!auctionState.top_bidder_id}
-                          className="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed border border-green-400/50"
+                          disabled={!auctionState.top_bidder_id || auctionState.is_paused}
+                          className={`px-4 py-2 rounded-xl text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed border transition ${
+                            countdown === 0 && auctionState.top_bidder_id && !auctionState.is_paused
+                              ? 'bg-green-500 border-green-300 animate-pulse shadow-lg shadow-green-500/40'
+                              : 'bg-green-600 hover:bg-green-500 border-green-400/50'
+                          }`}
                         >
                           Hammer — sell to high bid
                         </button>
@@ -978,7 +1161,8 @@ export default function RoomPage() {
                               return
                             void hostHammer('pass')
                           }}
-                          className="px-4 py-2 rounded-xl bg-slate-600 hover:bg-slate-500 text-white text-sm font-semibold border border-slate-400/50"
+                          disabled={auctionState.is_paused}
+                          className="px-4 py-2 rounded-xl bg-slate-600 hover:bg-slate-500 text-white text-sm font-semibold border border-slate-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           Pass — no sale
                         </button>
@@ -1009,7 +1193,7 @@ export default function RoomPage() {
                     <div className="text-5xl font-black text-white text-center mb-2">
                       {formatMoney(auctionState.current_bid)}
                     </div>
-                    <div className="text-center">
+                    <div className="text-center mb-4">
                       <span className="text-slate-400">Held by: </span>
                       <span className={`font-bold ${
                         auctionState.top_bidder_id === currentUser?.id ? 'text-green-400' : 'text-yellow-400'
@@ -1017,26 +1201,52 @@ export default function RoomPage() {
                         {getTopBidderName()}
                       </span>
                     </div>
+                    {countdown !== null && (
+                      <div>
+                        <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-2 rounded-full ${auctionState.is_paused ? '' : 'transition-all duration-1000'} ${
+                              auctionState.is_paused
+                                ? 'bg-amber-400'
+                                : countdown === 0 ? 'bg-green-400' : countdown <= 10 ? 'bg-red-400' : 'bg-yellow-400'
+                            }`}
+                            style={{ width: `${(countdown / BID_TIMEOUT_SECONDS) * 100}%` }}
+                          />
+                        </div>
+                        <div className="text-center text-xs mt-1 text-slate-500">
+                          {auctionState.is_paused
+                            ? 'Timer paused'
+                            : countdown === 0 ? 'Time\'s up — host can now hammer' : `${countdown}s remaining`}
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {auctionState.is_paused && (
+                    <div className="flex items-center justify-center gap-2 mb-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm font-medium">
+                      <span>⏸</span>
+                      <span>Auction paused — the host is taking a moment</span>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-3 gap-3 mb-4">
                     <button
                       onClick={() => placeBid(2000000)}
-                      disabled={auctionState.top_bidder_id === currentUser?.id}
+                      disabled={auctionState.top_bidder_id === currentUser?.id || auctionState.is_paused}
                       className="py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       +20 L
                     </button>
                     <button
                       onClick={() => placeBid(5000000)}
-                      disabled={auctionState.top_bidder_id === currentUser?.id}
+                      disabled={auctionState.top_bidder_id === currentUser?.id || auctionState.is_paused}
                       className="py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       +50 L
                     </button>
                     <button
                       onClick={() => placeBid(10000000)}
-                      disabled={auctionState.top_bidder_id === currentUser?.id}
+                      disabled={auctionState.top_bidder_id === currentUser?.id || auctionState.is_paused}
                       className="py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition border border-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       +1 Cr
@@ -1045,73 +1255,194 @@ export default function RoomPage() {
 
                   {bidMessage && (
                     <div className={`text-center text-sm font-medium ${
-                      bidMessage.includes('success') ? 'text-green-400' : 'text-red-400'
+                      bidMessage.includes('success') || bidMessage.includes('placed') ? 'text-green-400' : 'text-red-400'
                     }`}>
                       {bidMessage}
+                    </div>
+                  )}
+
+                  {upcomingLots.length > 0 && (
+                    <div className="mt-6 pt-4 border-t border-slate-700">
+                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+                        Coming Up ({upcomingLots.length} more)
+                      </h4>
+                      <div className="space-y-2">
+                        {upcomingLots.map((p, i) => (
+                          <div key={p.id} className="flex items-center gap-3 bg-slate-800/40 rounded-lg px-3 py-2">
+                            <span className="text-slate-500 text-xs w-4 shrink-0">{i + 1}</span>
+                            <img
+                              src={p.image_url || 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=40'}
+                              alt={p.player_name}
+                              className="w-7 h-7 rounded-full object-cover shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-white text-xs font-medium truncate">{p.player_name}</div>
+                              <div className="text-slate-500 text-[10px]">{p.player_type}{p.team ? ` · ${p.team}` : ''}</div>
+                            </div>
+                            <span className="text-slate-400 text-xs shrink-0">{formatMoney(p.base_price)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
               )}
             </div>
 
-            <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-6">
-              <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">
-                My Stats
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <div className="text-xs text-slate-400 mb-1">Remaining Budget</div>
-                  <div className="text-2xl font-bold text-green-400">
-                    {formatMoney((currentUser?.budget || 0) - (currentUser?.spent || 0))}
+            <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-6 flex flex-col gap-6">
+              <div>
+                <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">
+                  My Stats
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1">Remaining Budget</div>
+                    <div className="text-2xl font-bold text-green-400">
+                      {formatMoney((currentUser?.budget || 0) - (currentUser?.spent || 0))}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400 mb-1">Squad Size</div>
-                  <div className="text-2xl font-bold text-white">
-                    {currentUser?.squad_count || 0} / 25
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1">Squad Size</div>
+                    <div className="text-2xl font-bold text-white">
+                      {currentUser?.squad_count || 0} / 25
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400 mb-1">Total Spent</div>
-                  <div className="text-xl font-bold text-red-400">
-                    {formatMoney(currentUser?.spent || 0)}
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1">Total Spent</div>
+                    <div className="text-xl font-bold text-red-400">
+                      {formatMoney(currentUser?.spent || 0)}
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {auctionState?.is_active && (
+                <div>
+                  <h3 className="text-sm font-bold text-white mb-3 border-b border-slate-700 pb-2">
+                    Bid History
+                  </h3>
+                  {bidHistory.length === 0 ? (
+                    <p className="text-slate-500 text-xs text-center py-4">No bids yet</p>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {bidHistory.map((b, i) => (
+                        <div
+                          key={b.id}
+                          className={`flex justify-between items-center rounded-lg px-3 py-2 text-xs ${
+                            i === 0
+                              ? 'bg-yellow-500/20 border border-yellow-500/40'
+                              : 'bg-slate-800/60'
+                          }`}
+                        >
+                          <span className={`font-semibold truncate pr-2 ${i === 0 ? 'text-yellow-300' : 'text-slate-300'}`}>
+                            {b.display_name}
+                          </span>
+                          <span className={`shrink-0 font-bold ${i === 0 ? 'text-yellow-400' : 'text-slate-400'}`}>
+                            {formatMoney(b.amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {activeTab === 'squad' && (
           <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
-            <h2 className="text-2xl font-bold text-white mb-6">My Squad</h2>
+            <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+              <h2 className="text-2xl font-bold text-white">My Squad</h2>
+              {mySquad.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rows = [
+                      ['Player', 'Team', 'Type', 'Purchase Price'],
+                      ...mySquad.map(p => [
+                        p.player_name,
+                        p.team || '',
+                        p.player_type,
+                        p.sold_price ? String(p.sold_price) : '0',
+                      ])
+                    ]
+                    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+                    const blob = new Blob([csv], { type: 'text/csv' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${currentUser?.display_name || 'squad'}_squad.csv`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-500 rounded-xl text-sm font-medium transition"
+                >
+                  Export CSV
+                </button>
+              )}
+            </div>
+
             {mySquad.length === 0 ? (
               <div className="text-center py-12 text-slate-400">
                 No players yet. Start bidding!
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {mySquad.map(player => (
-                  <div key={player.id} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={player.image_url || 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=80'}
-                        alt={player.player_name}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                      <div className="flex-1">
-                        <div className="font-bold text-white">{player.player_name}</div>
-                        <div className="text-xs text-slate-400">
-                          {[player.team, player.player_type].filter(Boolean).join(' · ') || player.player_type}
+              <>
+                {/* Squad composition summary */}
+                <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {(() => {
+                    const typeCounts: Record<string, number> = {}
+                    mySquad.forEach(p => {
+                      typeCounts[p.player_type] = (typeCounts[p.player_type] || 0) + 1
+                    })
+                    const totalSpent = mySquad.reduce((s, p) => s + (p.sold_price || 0), 0)
+                    const avgPrice = mySquad.length > 0 ? Math.round(totalSpent / mySquad.length) : 0
+                    return (
+                      <>
+                        {Object.entries(typeCounts).map(([type, count]) => (
+                          <div key={type} className="bg-slate-800/60 rounded-xl p-3 border border-slate-700 text-center">
+                            <div className="text-xl font-bold text-white">{count}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">{type}</div>
+                          </div>
+                        ))}
+                        <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700 text-center">
+                          <div className="text-lg font-bold text-yellow-400">{formatMoney(avgPrice)}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">Avg price</div>
+                        </div>
+                        <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700 text-center">
+                          <div className="text-lg font-bold text-red-400">{formatMoney(totalSpent)}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">Total spent</div>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {mySquad.map(player => (
+                    <div key={player.id} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={player.image_url || 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=80'}
+                          alt={player.player_name}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                        <div className="flex-1">
+                          <div className="font-bold text-white">{player.player_name}</div>
+                          <div className="text-xs text-slate-400">
+                            {[player.team, player.player_type].filter(Boolean).join(' · ') || player.player_type}
+                          </div>
                         </div>
                       </div>
+                      <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between items-center">
+                        <span className="text-xs text-slate-500">Base: {formatMoney(player.base_price)}</span>
+                        <span className="text-green-400 font-bold">{formatMoney(player.sold_price || 0)}</span>
+                      </div>
                     </div>
-                    <div className="mt-2 pt-2 border-t border-slate-700 text-right">
-                      <span className="text-green-400 font-bold">{formatMoney(player.sold_price || 0)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}
@@ -1164,7 +1495,27 @@ export default function RoomPage() {
 
         {activeTab === 'players' && (
           <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
-            <h2 className="text-2xl font-bold text-white mb-6">All Players</h2>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+              <h2 className="text-2xl font-bold text-white">All Players</h2>
+              <div className="flex flex-wrap gap-2 items-center">
+                <input
+                  type="text"
+                  placeholder="Search player or team…"
+                  value={playerSearch}
+                  onChange={e => setPlayerSearch(e.target.value)}
+                  className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-1.5 text-white text-sm placeholder:text-slate-500 w-48"
+                />
+                <select
+                  value={playerStatusFilter}
+                  onChange={e => setPlayerStatusFilter(e.target.value)}
+                  className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-1.5 text-white text-sm"
+                >
+                  <option value="ALL">All status</option>
+                  <option value="UNSOLD">Unsold</option>
+                  <option value="SOLD">Sold</option>
+                </select>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-800 text-slate-400">
@@ -1177,8 +1528,19 @@ export default function RoomPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
-                  {allPlayers.map(player => (
-                    <tr key={player.id}>
+                  {allPlayers
+                    .filter(p => {
+                      const q = playerSearch.toLowerCase()
+                      const matchSearch = !q || p.player_name.toLowerCase().includes(q) || (p.team || '').toLowerCase().includes(q)
+                      const matchStatus = playerStatusFilter === 'ALL' || p.status === playerStatusFilter
+                      return matchSearch && matchStatus
+                    })
+                    .map(player => {
+                    const remainingBudget = (currentUser?.budget || 0) - (currentUser?.spent || 0)
+                    const canAfford = player.status === 'UNSOLD' && player.base_price <= remainingBudget
+                    const tooExpensive = player.status === 'UNSOLD' && player.base_price > remainingBudget
+                    return (
+                    <tr key={player.id} className={tooExpensive ? 'opacity-50' : ''}>
                       <td className="p-3">
                         <div className="flex items-center gap-3">
                           <img
@@ -1205,11 +1567,19 @@ export default function RoomPage() {
                             {player.sold_to && <div className="text-xs text-slate-400">{player.sold_to}</div>}
                           </div>
                         ) : (
-                          <span className="text-slate-400">{formatMoney(player.base_price)}</span>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className={canAfford ? 'text-slate-300' : 'text-red-400'}>
+                              {formatMoney(player.base_price)}
+                            </span>
+                            {tooExpensive && (
+                              <span className="text-[10px] text-red-500">Out of budget</span>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
