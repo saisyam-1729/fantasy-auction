@@ -329,24 +329,26 @@ export default function RoomPage() {
     }
 
     if (data) {
-      const playerList = await Promise.all(data.map(async (p) => {
-        let soldToName = undefined
-        if (p.sold_to_user_id) {
-          const { data: userData } = await supabase
-            .from('room_users')
-            .select('display_name')
-            .eq('id', p.sold_to_user_id)
-            .maybeSingle()
-          soldToName = userData?.display_name
+      // Batch-fetch all sold_to display names in a single query instead of N+1
+      const soldToIds = [...new Set(
+        data.filter(p => p.sold_to_user_id).map(p => p.sold_to_user_id as string)
+      )]
+      const soldToMap: Record<string, string> = {}
+      if (soldToIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from('room_users')
+          .select('id, display_name')
+          .in('id', soldToIds)
+        if (usersData) {
+          usersData.forEach(u => { soldToMap[u.id] = u.display_name })
         }
+      }
 
+      const playerList = data.map((p) => {
         const inv = inventoryRow(
           p.player_inventory as PlayerInventoryRow | PlayerInventoryRow[] | null
         )
-        if (!inv) {
-          return null
-        }
-
+        if (!inv) return null
         return {
           id: p.id,
           player_name: inv.player_name,
@@ -356,9 +358,9 @@ export default function RoomPage() {
           team: inv.team ?? null,
           status: p.status,
           sold_price: p.sold_price || undefined,
-          sold_to: soldToName
+          sold_to: p.sold_to_user_id ? soldToMap[p.sold_to_user_id] : undefined,
         }
-      }))
+      })
 
       setAllPlayers(playerList.filter((p): p is NonNullable<typeof p> => p != null))
     }
@@ -568,10 +570,12 @@ export default function RoomPage() {
 
     if (error) {
       setBidMessage(error.message || 'Bidding error')
+      setTimeout(() => setBidMessage(''), 3000)
       return
     }
 
-    setBidMessage('Bid placed successfully!')
+    setBidMessage('Bid placed!')
+    setTimeout(() => setBidMessage(''), 2000)
     await fetchAuctionState(roomId)
   }
 
@@ -652,6 +656,8 @@ export default function RoomPage() {
         filter: `room_id=eq.${roomId}`
       }, () => {
         void fetchAuctionStateRef.current(roomId)
+        // Refresh player/squad data so non-host users see sold players immediately
+        void fetchAllPlayersRef.current(roomId)
       })
       .on('postgres_changes', {
         event: '*',
@@ -794,7 +800,26 @@ export default function RoomPage() {
               </div>
             )}
             <div className="lg:col-span-2 backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
-              {!auctionState?.is_active && (
+              {!auctionState?.is_active && allPlayers.some(p => p.status === 'SOLD') && (
+                <div className="text-center py-10 px-2">
+                  <div className="text-6xl mb-4">🏆</div>
+                  <h2 className="text-3xl font-bold text-white mb-3">Auction Complete</h2>
+                  <p className="text-slate-300 mb-6">
+                    All available lots have been sold or passed. Check the Leaderboard and All Players tabs for results.
+                  </p>
+                  {showHostTools && (
+                    <button
+                      type="button"
+                      onClick={() => void handleRestartAuction()}
+                      className="px-8 py-3 bg-amber-600 hover:bg-amber-500 text-slate-900 font-bold rounded-xl transition"
+                    >
+                      Reset & run again
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {!auctionState?.is_active && !allPlayers.some(p => p.status === 'SOLD') && (
                 <div className="text-center py-10 px-2">
                   <div className="text-6xl mb-4">⏳</div>
                   <h2 className="text-3xl font-bold text-white mb-3">Waiting to Start</h2>
