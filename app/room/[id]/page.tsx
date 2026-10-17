@@ -7,6 +7,10 @@ import {
   MAX_PLAYERS_IN_ROOM,
   readyVotesNeededToStart,
 } from '@/lib/auctionConsensus'
+import { nextBidIncrement } from '@/lib/bidSlabs'
+import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD, purseLock } from '@/lib/purse'
+import { computeInsights, rivalsStrip } from '@/lib/insights'
+import InsightsPanel from '@/components/InsightsPanel'
 import { useRouter, useParams } from 'next/navigation'
 
 interface RoomUser {
@@ -31,6 +35,8 @@ interface Player {
   status: string
   sold_price?: number
   sold_to?: string
+  sold_to_user_id?: string
+  purchased_at?: string
 }
 
 interface AuctionState {
@@ -62,6 +68,13 @@ interface PlayerInventoryRow {
 type AuctionSortMode = 'created_asc' | 'base_price_asc' | 'base_price_desc'
 
 const FILTER_PLAYER_TYPES = ['BAT', 'BOWL', 'AR', 'WK', 'ALL'] as const
+const SQUAD_ROLES = ['WK', 'BAT', 'ALL', 'BOWL'] as const
+
+function squadRole(playerType: string): (typeof SQUAD_ROLES)[number] | null {
+  if (playerType === 'WK' || playerType === 'BAT' || playerType === 'BOWL') return playerType
+  if (playerType === 'ALL' || playerType === 'AR') return 'ALL'
+  return null
+}
 
 /** PostgREST embed types often infer many-to-one as T | T[] */
 function inventoryRow(
@@ -84,7 +97,7 @@ export default function RoomPage() {
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
   const [mySquad, setMySquad] = useState<Player[]>([])
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
-  const [activeTab, setActiveTab] = useState<'auction' | 'squad' | 'leaderboard' | 'players'>('auction')
+  const [activeTab, setActiveTab] = useState<'auction' | 'squad' | 'leaderboard' | 'players' | 'insights'>('auction')
   const [bidMessage, setBidMessage] = useState('')
   const [countdown, setCountdown] = useState<number | null>(null)
   const [bidHistory, setBidHistory] = useState<BidHistoryEntry[]>([])
@@ -100,6 +113,11 @@ export default function RoomPage() {
   const [hostMinBase, setHostMinBase] = useState('')
   const [hostMaxBase, setHostMaxBase] = useState('')
   const [hostFilterMessage, setHostFilterMessage] = useState('')
+  const [minSquadSize, setMinSquadSize] = useState(DEFAULT_MIN_SQUAD)
+  const [maxSquadSize, setMaxSquadSize] = useState(DEFAULT_MAX_SQUAD)
+  const [hostMinSquad, setHostMinSquad] = useState(String(DEFAULT_MIN_SQUAD))
+  const [hostMaxSquad, setHostMaxSquad] = useState(String(DEFAULT_MAX_SQUAD))
+  const [squadSizeMessage, setSquadSizeMessage] = useState('')
 
   /** Avoid stale `currentUser` in realtime `fetchRoomUsers` (effect closure). */
   const myRoomUserIdRef = useRef<string | null>(null)
@@ -174,6 +192,18 @@ export default function RoomPage() {
               ? String(mx)
               : ''
         )
+      }
+
+      const roomSquad = room as { min_squad_size?: number; max_squad_size?: number }
+      const loadedMin = Number(roomSquad.min_squad_size)
+      const loadedMax = Number(roomSquad.max_squad_size)
+      if (Number.isFinite(loadedMin) && loadedMin > 0) {
+        setMinSquadSize(loadedMin)
+        setHostMinSquad(String(loadedMin))
+      }
+      if (Number.isFinite(loadedMax) && loadedMax > 0) {
+        setMaxSquadSize(loadedMax)
+        setHostMaxSquad(String(loadedMax))
       }
 
       let roomUser = null
@@ -374,6 +404,17 @@ export default function RoomPage() {
         }
       }
 
+      const purchaseAt: Record<string, string> = {}
+      const { data: squadRows } = await supabase
+        .from('user_squads')
+        .select('player_id, purchased_at, room_users!inner(room_id)')
+        .eq('room_users.room_id', targetRoomId)
+      if (squadRows) {
+        for (const row of squadRows) {
+          if (row.player_id && row.purchased_at) purchaseAt[row.player_id] = row.purchased_at
+        }
+      }
+
       const playerList = data.map((p) => {
         const inv = inventoryRow(
           p.player_inventory as PlayerInventoryRow | PlayerInventoryRow[] | null
@@ -389,6 +430,8 @@ export default function RoomPage() {
           status: p.status,
           sold_price: p.sold_price || undefined,
           sold_to: p.sold_to_user_id ? soldToMap[p.sold_to_user_id] : undefined,
+          sold_to_user_id: p.sold_to_user_id || undefined,
+          purchased_at: purchaseAt[p.id],
         }
       })
 
@@ -551,6 +594,47 @@ export default function RoomPage() {
     setHostFilterMessage('Saved. Next lots use this order & filters.')
   }
 
+  async function fetchSquadSizes(id?: string) {
+    const targetRoomId = id || roomId
+    if (!targetRoomId) return
+    const { data } = await supabase
+      .from('rooms')
+      .select('min_squad_size, max_squad_size')
+      .eq('id', targetRoomId)
+      .maybeSingle()
+    if (!data) return
+    const loadedMin = Number(data.min_squad_size)
+    const loadedMax = Number(data.max_squad_size)
+    if (Number.isFinite(loadedMin) && loadedMin > 0) setMinSquadSize(loadedMin)
+    if (Number.isFinite(loadedMax) && loadedMax > 0) setMaxSquadSize(loadedMax)
+  }
+
+  async function saveSquadSizes() {
+    if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
+    setSquadSizeMessage('')
+    const minV = Number(hostMinSquad)
+    const maxV = Number(hostMaxSquad)
+    if (!Number.isInteger(minV) || !Number.isInteger(maxV) || minV < 1 || maxV > 30 || minV > maxV) {
+      setSquadSizeMessage('Use whole numbers from 1 to 30. Minimum cannot be above maximum.')
+      return
+    }
+    const { error } = await supabase.rpc('admin_set_squad_sizes', {
+      p_room_id: roomId,
+      p_min: minV,
+      p_max: maxV,
+    })
+    if (error) {
+      setSquadSizeMessage(
+        error.message +
+          '\n\nRun supabase/auction_bid_slabs.sql in the Supabase SQL Editor if squad size is not set up yet.'
+      )
+      return
+    }
+    setMinSquadSize(minV)
+    setMaxSquadSize(maxV)
+    setSquadSizeMessage('Saved. The purse locks only until each team reaches the minimum.')
+  }
+
   async function hostPauseResume(paused: boolean) {
     if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
     const { error } = await supabase.rpc('auction_set_paused', {
@@ -645,15 +729,36 @@ export default function RoomPage() {
 
     setBidMessage('')
 
-    const newBid = auctionState.current_bid + amount
-    const remaining = currentUser.budget - currentUser.spent
-    if (newBid > remaining) {
-      setBidMessage('Insufficient funds!')
+    const legalIncrement = nextBidIncrement(auctionState.current_bid)
+    if (amount !== legalIncrement) {
+      setBidMessage('Bid must be the next slab step')
+      setTimeout(() => setBidMessage(''), 3000)
       return
     }
 
-    if (currentUser.squad_count >= 25) {
-      setBidMessage('Squad full (25 players max)!')
+    if (currentUser.squad_count >= maxSquadSize) {
+      setBidMessage(`Squad full (${maxSquadSize} players max)!`)
+      return
+    }
+
+    const newBid = auctionState.current_bid + amount
+    const purse = purseLock({
+      budget: currentUser.budget,
+      spent: currentUser.spent,
+      squadCount: currentUser.squad_count,
+      minSquadSize,
+      maxSquadSize,
+      otherUnsoldBasePrices: allPlayers
+        .filter((p) => p.status === 'UNSOLD' && p.id !== currentPlayer.id)
+        .map((p) => p.base_price),
+    })
+    if (newBid > purse.remaining) {
+      setBidMessage('Insufficient funds!')
+      return
+    }
+    if (newBid > purse.freeToSpend) {
+      setBidMessage('That bid would leave too little for your open slots')
+      setTimeout(() => setBidMessage(''), 3000)
       return
     }
 
@@ -684,6 +789,13 @@ export default function RoomPage() {
     return `₹${amount}`
   }
 
+  function purseLine(purse: { freeToSpend: number; slotsLeft: number; atCap: boolean }) {
+    const free = formatMoney(Math.max(0, purse.freeToSpend))
+    if (purse.atCap) return `${free} free to spend, squad full`
+    if (purse.slotsLeft === 0) return `${free} free to spend, minimum filled`
+    return `${free} free to spend, ${purse.slotsLeft} to minimum`
+  }
+
   function getTopBidderName() {
     if (!auctionState?.top_bidder_id) return 'No Bids'
     const bidder = allUsers.find(u => u.id === auctionState.top_bidder_id)
@@ -698,6 +810,8 @@ export default function RoomPage() {
   fetchAllPlayersRef.current = fetchAllPlayers
   const fetchBidHistoryRef = useRef(fetchBidHistory)
   fetchBidHistoryRef.current = fetchBidHistory
+  const fetchSquadSizesRef = useRef(fetchSquadSizes)
+  fetchSquadSizesRef.current = fetchSquadSizes
 
   const consensusKey = useMemo(() => {
     const sig = allUsers
@@ -772,6 +886,14 @@ export default function RoomPage() {
       }, () => {
         void fetchRoomUsersRef.current(roomId)
       })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'rooms',
+        filter: `id=eq.${roomId}`
+      }, () => {
+        void fetchSquadSizesRef.current(roomId)
+      })
       .subscribe()
 
     return () => {
@@ -800,6 +922,7 @@ export default function RoomPage() {
 
     const t = window.setInterval(() => {
       void fetchRoomUsersRef.current(roomId)
+      void fetchSquadSizesRef.current(roomId)
     }, 3000)
 
     return () => window.clearInterval(t)
@@ -837,6 +960,112 @@ export default function RoomPage() {
 
   const showHostTools = Boolean(currentUser?.is_admin || canUseHostControls)
 
+  const myPurse = useMemo(() => {
+    if (!currentUser) return null
+    return purseLock({
+      budget: currentUser.budget,
+      spent: currentUser.spent,
+      squadCount: currentUser.squad_count,
+      minSquadSize,
+      maxSquadSize,
+      otherUnsoldBasePrices: allPlayers
+        .filter((p) => p.status === 'UNSOLD' && p.id !== auctionState?.current_player_id)
+        .map((p) => p.base_price),
+    })
+  }, [currentUser, allPlayers, auctionState?.current_player_id, minSquadSize, maxSquadSize])
+
+  const squadBoards = useMemo(() => {
+    return allUsers.map((user) => {
+      const buys = allPlayers
+        .filter((p) => p.status === 'SOLD' && p.sold_to_user_id === user.id)
+        .sort((a, b) => {
+          const ta = a.purchased_at ? Date.parse(a.purchased_at) : 0
+          const tb = b.purchased_at ? Date.parse(b.purchased_at) : 0
+          return tb - ta
+        })
+      const counts: Record<(typeof SQUAD_ROLES)[number], number> = { WK: 0, BAT: 0, ALL: 0, BOWL: 0 }
+      for (const player of buys) {
+        const role = squadRole(player.player_type)
+        if (role) counts[role] += 1
+      }
+      return { user, counts, lastBuys: buys.slice(0, 2), size: buys.length }
+    })
+  }, [allUsers, allPlayers])
+
+  const insights = useMemo(
+    () => computeInsights({ users: allUsers, players: allPlayers, minSquad: minSquadSize, maxSquad: maxSquadSize }),
+    [allUsers, allPlayers, minSquadSize, maxSquadSize]
+  )
+  const strip = rivalsStrip(insights, currentUser?.id)
+
+  function renderSquadBoards() {
+    return (
+      <div className="grid gap-3 md:grid-cols-2">
+        {squadBoards.map((board) => {
+          const mine = board.user.id === currentUser?.id
+          const noKeeper = board.counts.WK === 0
+          return (
+            <div
+              key={board.user.id}
+              className={`rounded-xl border px-3 py-3 ${
+                mine ? 'border-yellow-500/50 bg-yellow-500/10' : 'border-slate-700 bg-slate-900/50'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="min-w-0">
+                  <div className="font-semibold text-white text-sm truncate">
+                    {board.user.display_name}
+                    {mine ? ' · You' : ''}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {formatMoney(board.user.budget - board.user.spent)} left · {board.size}/{maxSquadSize}
+                  </div>
+                </div>
+                {noKeeper && (
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40">
+                    No WK
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {SQUAD_ROLES.map((role) => (
+                  <span
+                    key={role}
+                    className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
+                      role === 'WK' && board.counts[role] === 0
+                        ? 'bg-amber-500/15 text-amber-200'
+                        : 'bg-slate-800 text-slate-200'
+                    }`}
+                  >
+                    {role} {board.counts[role]}
+                  </span>
+                ))}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                {board.lastBuys.length === 0 ? (
+                  'No players yet'
+                ) : (
+                  <>
+                    Last:{' '}
+                    {board.lastBuys.map((player, i) => (
+                      <span key={player.id}>
+                        {i > 0 ? ' · ' : ''}
+                        <span className="text-slate-200">{player.player_name}</span>
+                        {' '}
+                        {squadRole(player.player_type) || player.player_type}
+                        {player.sold_price ? ` ${formatMoney(player.sold_price)}` : ''}
+                      </span>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
@@ -855,7 +1084,7 @@ export default function RoomPage() {
                 <h1 className="text-2xl font-bold text-white">🏏 Auction Room</h1>
                 <p className="text-slate-300 text-sm flex flex-wrap items-center gap-2">
                   <span>
-                    {allUsers.length} Players • {currentUser?.display_name}
+                    {allUsers.length} Players • Squad {minSquadSize}–{maxSquadSize} • {currentUser?.display_name}
                   </span>
                   {(currentUser?.is_admin || canUseHostControls) && (
                     <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40">
@@ -868,8 +1097,13 @@ export default function RoomPage() {
                 <div className="text-right">
                   <div className="text-xs text-slate-400">Your Budget</div>
                   <div className="text-xl font-bold text-green-400">
-                    {formatMoney((currentUser?.budget || 0) - (currentUser?.spent || 0))}
+                    {formatMoney(myPurse?.remaining || 0)}
                   </div>
+                  {myPurse && (
+                    <div className="text-[11px] text-slate-300">
+                      {purseLine(myPurse)}
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -881,17 +1115,52 @@ export default function RoomPage() {
               </div>
             </div>
             {(currentUser?.is_admin || canUseHostControls) && (
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10">
-                <p className="text-xs text-slate-400 max-w-xl">
-                  Host tools: reset clears this room&apos;s bids, squads, and sold status so you can run again.
+              <div className="flex flex-col gap-3 pt-2 border-t border-white/10">
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="text-xs text-slate-300">
+                    Minimum squad
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={hostMinSquad}
+                      disabled={auctionState?.is_active}
+                      onChange={(e) => setHostMinSquad(e.target.value)}
+                      className="mt-1 block w-24 rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-white text-sm disabled:opacity-50"
+                    />
+                  </label>
+                  <label className="text-xs text-slate-300">
+                    Maximum squad
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={hostMaxSquad}
+                      disabled={auctionState?.is_active}
+                      onChange={(e) => setHostMaxSquad(e.target.value)}
+                      className="mt-1 block w-24 rounded-lg bg-slate-800 border border-slate-600 px-3 py-2 text-white text-sm disabled:opacity-50"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void saveSquadSizes()}
+                    disabled={auctionState?.is_active}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white border border-slate-500 rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Save squad size
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleRestartAuction()}
+                    className="px-4 py-2 bg-amber-950/60 text-amber-100 border border-amber-500/70 rounded-xl hover:bg-amber-900/80 transition text-sm font-semibold"
+                  >
+                    Reset auction
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 max-w-3xl whitespace-pre-wrap">
+                  The purse stays locked until a team reaches the minimum. Players above that, up to the maximum, do not reserve money. Squad size can be changed before the auction starts.
+                  {squadSizeMessage ? ` ${squadSizeMessage}` : ''}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => void handleRestartAuction()}
-                  className="shrink-0 px-4 py-2 bg-amber-950/60 text-amber-100 border border-amber-500/70 rounded-xl hover:bg-amber-900/80 transition text-sm font-semibold"
-                >
-                  Reset auction
-                </button>
               </div>
             )}
           </div>
@@ -908,7 +1177,7 @@ export default function RoomPage() {
       )}
 
       <div className="max-w-7xl mx-auto mb-6 flex gap-2 overflow-x-auto">
-        {(['auction', 'squad', 'leaderboard', 'players'] as const).map(tab => (
+        {(['auction', 'squad', 'leaderboard', 'players', 'insights'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -922,6 +1191,7 @@ export default function RoomPage() {
             {tab === 'squad' && `My Squad (${currentUser?.squad_count || 0})`}
             {tab === 'leaderboard' && 'Leaderboard'}
             {tab === 'players' && 'All Players'}
+            {tab === 'insights' && 'Insights'}
           </button>
         ))}
       </div>
@@ -1229,29 +1499,35 @@ export default function RoomPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-3 gap-3 mb-4">
-                    <button
-                      onClick={() => placeBid(2000000)}
-                      disabled={auctionState.top_bidder_id === currentUser?.id || auctionState.is_paused}
-                      className="py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      +20 L
-                    </button>
-                    <button
-                      onClick={() => placeBid(5000000)}
-                      disabled={auctionState.top_bidder_id === currentUser?.id || auctionState.is_paused}
-                      className="py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      +50 L
-                    </button>
-                    <button
-                      onClick={() => placeBid(10000000)}
-                      disabled={auctionState.top_bidder_id === currentUser?.id || auctionState.is_paused}
-                      className="py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition border border-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      +1 Cr
-                    </button>
-                  </div>
+                  {(() => {
+                    const raise = nextBidIncrement(auctionState.current_bid)
+                    const nextPrice = auctionState.current_bid + raise
+                    const remaining = myPurse?.remaining ?? 0
+                    const freeToSpend = myPurse?.freeToSpend ?? 0
+                    const cantAfford = nextPrice > remaining
+                    const locksPurse = nextPrice > freeToSpend
+                    const holdBid = auctionState.top_bidder_id === currentUser?.id
+                    return (
+                      <div className="mb-4">
+                        <button
+                          onClick={() => placeBid(raise)}
+                          disabled={holdBid || auctionState.is_paused || locksPurse}
+                          className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {holdBid
+                            ? 'You hold the highest bid'
+                            : cantAfford
+                              ? `Need ${formatMoney(nextPrice)}`
+                              : locksPurse
+                                ? 'Leaves the other slots short'
+                                : `Bid ${formatMoney(nextPrice)} · +${formatMoney(raise)}`}
+                        </button>
+                        <p className="text-center text-xs text-slate-500 mt-2">
+                          Under ₹2 Cr the raise is ₹10 L. From ₹2 Cr to ₹5 Cr it is ₹20 L. Above ₹5 Cr it is ₹25 L.
+                        </p>
+                      </div>
+                    )
+                  })()}
 
                   {bidMessage && (
                     <div className={`text-center text-sm font-medium ${
@@ -1298,14 +1574,20 @@ export default function RoomPage() {
                   <div>
                     <div className="text-xs text-slate-400 mb-1">Remaining Budget</div>
                     <div className="text-2xl font-bold text-green-400">
-                      {formatMoney((currentUser?.budget || 0) - (currentUser?.spent || 0))}
+                      {formatMoney(myPurse?.remaining || 0)}
                     </div>
+                    {myPurse && (
+                      <div className="text-xs text-slate-300 mt-1">
+                        {purseLine(myPurse)}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="text-xs text-slate-400 mb-1">Squad Size</div>
                     <div className="text-2xl font-bold text-white">
-                      {currentUser?.squad_count || 0} / 25
+                      {currentUser?.squad_count || 0} / {maxSquadSize}
                     </div>
+                    <div className="text-xs text-slate-400 mt-1">Minimum {minSquadSize}</div>
                   </div>
                   <div>
                     <div className="text-xs text-slate-400 mb-1">Total Spent</div>
@@ -1347,7 +1629,14 @@ export default function RoomPage() {
                 </div>
               )}
             </div>
-          </div>
+          {auctionState?.is_active && (
+            <div className="lg:col-span-3 backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-5">
+              <h3 className="text-sm font-bold text-white mb-3">Squads so far</h3>
+              {strip && <p className="text-xs text-amber-200 mb-3">{strip}</p>}
+              {renderSquadBoards()}
+            </div>
+          )}
+        </div>
         )}
 
         {activeTab === 'squad' && (
@@ -1468,7 +1757,7 @@ export default function RoomPage() {
                     <th className="p-3 text-left">Team</th>
                     <th className="p-3 text-right">Spent</th>
                     <th className="p-3 text-right">Remaining</th>
-                    <th className="p-3 text-right">Squad</th>
+                    <th className="p-3 text-right">Squad (min {minSquadSize})</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
@@ -1484,12 +1773,23 @@ export default function RoomPage() {
                       </td>
                       <td className="p-3 text-right text-red-400">{formatMoney(user.spent)}</td>
                       <td className="p-3 text-right text-green-400">{formatMoney(user.budget - user.spent)}</td>
-                      <td className="p-3 text-right text-white">{user.squad_count} / 25</td>
+                      <td className="p-3 text-right text-white">{user.squad_count} / {maxSquadSize}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <div className="mt-8">
+              <h3 className="text-sm font-bold text-white mb-3">Squads so far</h3>
+              {renderSquadBoards()}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'insights' && (
+          <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-6">
+            <h2 className="text-2xl font-bold text-white mb-4">Insights</h2>
+            <InsightsPanel insights={insights} money={formatMoney} myUserId={currentUser?.id} />
           </div>
         )}
 
@@ -1536,9 +1836,20 @@ export default function RoomPage() {
                       return matchSearch && matchStatus
                     })
                     .map(player => {
-                    const remainingBudget = (currentUser?.budget || 0) - (currentUser?.spent || 0)
-                    const canAfford = player.status === 'UNSOLD' && player.base_price <= remainingBudget
-                    const tooExpensive = player.status === 'UNSOLD' && player.base_price > remainingBudget
+                    const lotPurse = currentUser
+                      ? purseLock({
+                          budget: currentUser.budget,
+                          spent: currentUser.spent,
+                          squadCount: currentUser.squad_count,
+                          minSquadSize,
+                          maxSquadSize,
+                          otherUnsoldBasePrices: allPlayers
+                            .filter((p) => p.status === 'UNSOLD' && p.id !== player.id)
+                            .map((p) => p.base_price),
+                        })
+                      : null
+                    const canAfford = player.status === 'UNSOLD' && !!lotPurse && player.base_price <= lotPurse.freeToSpend
+                    const tooExpensive = player.status === 'UNSOLD' && !!lotPurse && player.base_price > lotPurse.freeToSpend
                     return (
                     <tr key={player.id} className={tooExpensive ? 'opacity-50' : ''}>
                       <td className="p-3">
