@@ -297,7 +297,9 @@ BEGIN
 END;
 $$;
 
--- Bids: no timer mode flag
+-- Bids: no timer mode flag.
+-- Superseded by auction_pause.sql (pause) and auction_bid_slabs.sql (slab steps).
+-- Re-running this file replaces place_auction_bid; run those two files again after it.
 CREATE OR REPLACE FUNCTION public.place_auction_bid(p_room_id uuid, p_increment bigint)
 RETURNS void
 LANGUAGE plpgsql

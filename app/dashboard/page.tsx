@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD } from '@/lib/purse'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
 
@@ -23,6 +24,8 @@ export default function DashboardPage() {
   // Create Room State
   const [roomName, setRoomName] = useState('')
   const [inventoryType, setInventoryType] = useState('IPL')
+  const [minSquadSize, setMinSquadSize] = useState(String(DEFAULT_MIN_SQUAD))
+  const [maxSquadSize, setMaxSquadSize] = useState(String(DEFAULT_MAX_SQUAD))
   const [creating, setCreating] = useState(false)
   const [createMessage, setCreateMessage] = useState('')
   
@@ -115,6 +118,13 @@ export default function DashboardPage() {
       return
     }
 
+    const minSquad = Number(minSquadSize)
+    const maxSquad = Number(maxSquadSize)
+    if (!Number.isInteger(minSquad) || !Number.isInteger(maxSquad) || minSquad < 1 || maxSquad > 30 || minSquad > maxSquad) {
+      setCreateMessage('Squad size must be whole numbers from 1 to 30, and the minimum cannot be above the maximum.')
+      return
+    }
+
     setCreating(true)
     setCreateMessage('')
 
@@ -135,6 +145,8 @@ export default function DashboardPage() {
           player_inventory_type: inventoryType,
           status: 'WAITING',
           max_players: 10,
+          min_squad_size: minSquad,
+          max_squad_size: maxSquad,
         })
         .select()
         .single()
@@ -143,7 +155,10 @@ export default function DashboardPage() {
         if (roomError.code === '23505') { // Unique constraint violation
           setCreateMessage('Room name already exists. Try a different name.')
         } else {
-          setCreateMessage('Error creating room: ' + roomError.message)
+          const hint = /min_squad_size|max_squad_size/i.test(roomError.message)
+            ? ' Run supabase/auction_bid_slabs.sql in the Supabase SQL Editor.'
+            : ''
+          setCreateMessage('Error creating room: ' + roomError.message + hint)
         }
         setCreating(false)
         return
@@ -405,6 +420,38 @@ export default function DashboardPage() {
                   <option value="ODI_WC">ODI World Cup (International)</option>
                 </select>
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Minimum squad
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={minSquadSize}
+                    onChange={(e) => setMinSquadSize(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Maximum squad
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={maxSquadSize}
+                    onChange={(e) => setMaxSquadSize(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 -mt-2">
+                Default is 12 to 15. The purse must cover the minimum. Slots above that do not lock money.
+              </p>
 
               <button
                 onClick={handleCreateRoom}

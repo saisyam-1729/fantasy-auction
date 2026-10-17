@@ -15,7 +15,9 @@ ALTER TABLE public.live_auction_state
 COMMENT ON COLUMN public.live_auction_state.is_paused IS
   'When true the host has paused this lot. Bids are rejected and the countdown is frozen.';
 
--- Also block bids while paused inside the existing place_auction_bid function
+-- Also block bids while paused inside the existing place_auction_bid function.
+-- Bid amounts are further limited by supabase/auction_bid_slabs.sql.
+-- Re-running this file replaces place_auction_bid and drops the slab check; run auction_bid_slabs.sql again after it.
 CREATE OR REPLACE FUNCTION public.place_auction_bid(p_room_id uuid, p_increment bigint)
 RETURNS void
 LANGUAGE plpgsql
