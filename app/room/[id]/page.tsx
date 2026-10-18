@@ -15,6 +15,8 @@ import SquadBoards from '@/components/room/SquadBoards'
 import ResultsPanel from '@/components/room/ResultsPanel'
 import PlayerAvatar from '@/components/room/PlayerAvatar'
 import ConnectionBanner, { type ConnectionState } from '@/components/room/ConnectionBanner'
+import { useCountdown } from '@/hooks/useCountdown'
+import { useAutoSell } from '@/hooks/useAutoSell'
 import MySquadTab from '@/components/room/MySquadTab'
 import LeaderboardTab from '@/components/room/LeaderboardTab'
 import PlayersTab from '@/components/room/PlayersTab'
@@ -47,7 +49,6 @@ export default function RoomPage() {
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [activeTab, setActiveTab] = useState<'auction' | 'squad' | 'leaderboard' | 'players' | 'insights'>('auction')
   const [bidMessage, setBidMessage] = useState('')
-  const [countdown, setCountdown] = useState<number | null>(null)
   const [bidHistory, setBidHistory] = useState<BidHistoryEntry[]>([])
   const [upcomingLots, setUpcomingLots] = useState<Player[]>([])
   const [playerSearch, setPlayerSearch] = useState('')
@@ -944,49 +945,29 @@ export default function RoomPage() {
 
   const BID_TIMEOUT_SECONDS = 30
 
-  /** Countdown timer: counts down from BID_TIMEOUT_SECONDS after last bid. Freezes when paused. */
-  useEffect(() => {
-    if (!auctionState?.is_active || !auctionState.last_bid_time) {
-      setCountdown(null)
-      return
-    }
-    if (auctionState.is_paused) return  // freeze — don't clear, just stop ticking
-    const lastBidTime = auctionState.last_bid_time
-    function tick() {
-      const elapsed = Math.floor((Date.now() - new Date(lastBidTime).getTime()) / 1000)
-      const remaining = Math.max(0, BID_TIMEOUT_SECONDS - elapsed)
-      setCountdown(remaining)
-    }
-    tick()
-    const i = window.setInterval(tick, 1000)
-    return () => window.clearInterval(i)
-  }, [auctionState?.is_active, auctionState?.is_paused, auctionState?.last_bid_time])
+  /** Counts down from BID_TIMEOUT_SECONDS after the last bid. Freezes when paused. */
+  const countdown = useCountdown({
+    active: Boolean(auctionState?.is_active),
+    paused: Boolean(auctionState?.is_paused),
+    lastBidTime: auctionState?.last_bid_time ?? null,
+    seconds: BID_TIMEOUT_SECONDS,
+  })
 
-  /**
-   * With auto-sell on, any member's browser asks the database to sell once the
-   * timer has run out. The database re-checks the clock under a row lock, so
-   * several callers sell the lot exactly once.
-   */
-  const timerExpired = countdown === 0
-  useEffect(() => {
-    if (!roomId || !autoHammer || !timerExpired) return
-    if (!auctionState?.is_active || auctionState.is_paused || !auctionState.top_bidder_id) return
-    let busy = false
-    const id = window.setInterval(async () => {
-      if (busy) return
-      busy = true
-      try {
-        const { data } = await supabase.rpc('auction_finalize_expired', { p_room_id: roomId })
-        if (data === 'sold') {
-          await Promise.all([fetchAuctionState(roomId), fetchRoomUsers(roomId), fetchAllPlayers(roomId)])
-        }
-      } finally {
-        busy = false
+  /** With auto-sell on, ask the database to sell once the timer has run out. */
+  useAutoSell({
+    enabled: autoHammer && Boolean(roomId),
+    expired: countdown === 0,
+    active: Boolean(auctionState?.is_active),
+    paused: Boolean(auctionState?.is_paused),
+    hasTopBidder: Boolean(auctionState?.top_bidder_id),
+    finalize: async () => {
+      if (!roomId) return
+      const { data } = await supabase.rpc('auction_finalize_expired', { p_room_id: roomId })
+      if (data === 'sold') {
+        await Promise.all([fetchAuctionState(roomId), fetchRoomUsers(roomId), fetchAllPlayers(roomId)])
       }
-    }, 2000)
-    return () => window.clearInterval(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchers and client are stable for this room
-  }, [roomId, autoHammer, timerExpired, auctionState?.is_active, auctionState?.is_paused, auctionState?.top_bidder_id])
+    },
+  })
 
   const showHostTools = Boolean(currentUser?.is_admin || canUseHostControls)
 
