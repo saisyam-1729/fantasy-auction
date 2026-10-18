@@ -24,6 +24,7 @@ const ORDER = [
   'security_hardening.sql',
   'auto_hammer.sql',
   'undo_last_sale.sql',
+  'indexes.sql',
 ]
 
 const root = path.join(__dirname, '..')
