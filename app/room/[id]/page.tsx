@@ -1300,6 +1300,31 @@ export default function RoomPage() {
                       {currentUser?.ready_to_start ? 'Cancel ready' : 'I am ready'}
                     </button>
                   )}
+
+                  {showHostTools &&
+                    allUsers.length >= MIN_PLAYERS_FOR_AUCTION &&
+                    allUsers.length <= MAX_PLAYERS_IN_ROOM &&
+                    allUsers.filter((u) => u.ready_to_start).length >= readyVotesNeededToStart(allUsers.length) && (
+                      <div className="mt-4">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (await startAuction()) {
+                              await Promise.all([
+                                fetchAuctionState(roomId ?? undefined),
+                                fetchAllPlayers(roomId ?? undefined),
+                              ])
+                            }
+                          }}
+                          className="px-8 py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition shadow-lg"
+                        >
+                          Start auction now
+                        </button>
+                        <p className="text-xs text-slate-400 mt-2">
+                          Everyone needed is ready. It normally starts by itself; use this if it has not.
+                        </p>
+                      </div>
+                    )}
                 </div>
               )}
 
