@@ -60,6 +60,7 @@ export default function RoomPage() {
   const [hostFilterMessage, setHostFilterMessage] = useState('')
   const [minSquadSize, setMinSquadSize] = useState(DEFAULT_MIN_SQUAD)
   const [maxSquadSize, setMaxSquadSize] = useState(DEFAULT_MAX_SQUAD)
+  const [autoHammer, setAutoHammer] = useState(false)
   const [hostMinSquad, setHostMinSquad] = useState(String(DEFAULT_MIN_SQUAD))
   const [hostMaxSquad, setHostMaxSquad] = useState(String(DEFAULT_MAX_SQUAD))
   const [squadSizeMessage, setSquadSizeMessage] = useState('')
@@ -139,6 +140,7 @@ export default function RoomPage() {
         )
       }
 
+      setAutoHammer(Boolean((room as { auto_hammer?: boolean }).auto_hammer))
       const roomSquad = room as { min_squad_size?: number; max_squad_size?: number }
       const loadedMin = Number(roomSquad.min_squad_size)
       const loadedMax = Number(roomSquad.max_squad_size)
@@ -897,6 +899,32 @@ export default function RoomPage() {
     return () => window.clearInterval(i)
   }, [auctionState?.is_active, auctionState?.is_paused, auctionState?.last_bid_time])
 
+  /**
+   * With auto-sell on, any member's browser asks the database to sell once the
+   * timer has run out. The database re-checks the clock under a row lock, so
+   * several callers sell the lot exactly once.
+   */
+  const timerExpired = countdown === 0
+  useEffect(() => {
+    if (!roomId || !autoHammer || !timerExpired) return
+    if (!auctionState?.is_active || auctionState.is_paused || !auctionState.top_bidder_id) return
+    let busy = false
+    const id = window.setInterval(async () => {
+      if (busy) return
+      busy = true
+      try {
+        const { data } = await supabase.rpc('auction_finalize_expired', { p_room_id: roomId })
+        if (data === 'sold') {
+          await Promise.all([fetchAuctionState(roomId), fetchRoomUsers(roomId), fetchAllPlayers(roomId)])
+        }
+      } finally {
+        busy = false
+      }
+    }, 2000)
+    return () => window.clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchers and client are stable for this room
+  }, [roomId, autoHammer, timerExpired, auctionState?.is_active, auctionState?.is_paused, auctionState?.top_bidder_id])
+
   const showHostTools = Boolean(currentUser?.is_admin || canUseHostControls)
 
   const myPurse = useMemo(() => {
@@ -1341,7 +1369,9 @@ export default function RoomPage() {
                         <div className="text-center text-xs mt-1 text-slate-500">
                           {auctionState.is_paused
                             ? 'Timer paused'
-                            : countdown === 0 ? 'Time\'s up — host can now hammer' : `${countdown}s remaining`}
+                            : countdown === 0
+                              ? autoHammer ? 'Time\'s up — selling…' : 'Time\'s up — host can now hammer'
+                              : `${countdown}s remaining`}
                         </div>
                       </div>
                     )}

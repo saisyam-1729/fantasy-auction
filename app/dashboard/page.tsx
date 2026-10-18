@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [inventoryType, setInventoryType] = useState('IPL')
   const [minSquadSize, setMinSquadSize] = useState(String(DEFAULT_MIN_SQUAD))
   const [maxSquadSize, setMaxSquadSize] = useState(String(DEFAULT_MAX_SQUAD))
+  const [autoHammer, setAutoHammer] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createMessage, setCreateMessage] = useState('')
   
@@ -147,6 +148,7 @@ export default function DashboardPage() {
           max_players: 10,
           min_squad_size: minSquad,
           max_squad_size: maxSquad,
+          auto_hammer: autoHammer,
         })
         .select()
         .single()
@@ -392,6 +394,22 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-400 -mt-2">
                 Default is 12 to 15. The purse must cover the minimum. Slots above that do not lock money.
               </p>
+
+              <label className="flex items-start gap-3 text-sm text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoHammer}
+                  onChange={(e) => setAutoHammer(e.target.checked)}
+                  className="mt-1 h-4 w-4 accent-yellow-500"
+                />
+                <span>
+                  Auto-sell when the timer ends
+                  <span className="block text-xs text-slate-400">
+                    The lot sells to the top bidder 30 seconds after the last bid, even if the host is away.
+                    Lots with no bids still wait for the host.
+                  </span>
+                </span>
+              </label>
 
               <button
                 onClick={handleCreateRoom}
