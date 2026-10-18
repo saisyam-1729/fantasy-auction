@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "import:ipl2026": "node scripts/generate-ipl-2026-seed.cjs"
+    "import:ipl2026": "node scripts/generate-ipl-2026-seed.cjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -29,6 +31,7 @@
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vitest": "^3.2.7",
     "xlsx": "^0.18.5"
   }
 }
