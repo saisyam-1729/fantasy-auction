@@ -11,78 +11,23 @@ import { nextBidIncrement } from '@/lib/bidSlabs'
 import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD, purseLock } from '@/lib/purse'
 import { computeInsights, rivalsStrip } from '@/lib/insights'
 import InsightsPanel from '@/components/InsightsPanel'
+import SquadBoards from '@/components/room/SquadBoards'
+import MySquadTab from '@/components/room/MySquadTab'
+import LeaderboardTab from '@/components/room/LeaderboardTab'
+import PlayersTab from '@/components/room/PlayersTab'
+import { buildSquadBoards } from '@/lib/squadBoards'
 import { useRouter, useParams } from 'next/navigation'
-
-interface RoomUser {
-  id: string
-  username: string
-  display_name: string
-  budget: number
-  spent: number
-  squad_count: number
-  is_admin: boolean
-  ready_to_start?: boolean
-  joined_at?: string
-}
-
-interface Player {
-  id: string
-  player_name: string
-  player_type: string
-  base_price: number
-  image_url: string | null
-  team?: string | null
-  status: string
-  sold_price?: number
-  sold_to?: string
-  sold_to_user_id?: string
-  purchased_at?: string
-}
-
-interface AuctionState {
-  is_active: boolean
-  is_paused: boolean
-  current_player_id: string | null
-  current_bid: number
-  top_bidder_id: string | null
-  start_time: string | null
-  last_bid_time: string | null
-  timer_type: string | null
-}
-
-interface BidHistoryEntry {
-  id: string
-  amount: number
-  created_at: string
-  display_name: string
-}
-
-interface PlayerInventoryRow {
-  player_name: string
-  player_type: string
-  base_price: number
-  image_url: string | null
-  team?: string | null
-}
-
-type AuctionSortMode = 'created_asc' | 'base_price_asc' | 'base_price_desc'
-
-const FILTER_PLAYER_TYPES = ['BAT', 'BOWL', 'AR', 'WK', 'ALL'] as const
-const SQUAD_ROLES = ['WK', 'BAT', 'ALL', 'BOWL'] as const
-
-function squadRole(playerType: string): (typeof SQUAD_ROLES)[number] | null {
-  if (playerType === 'WK' || playerType === 'BAT' || playerType === 'BOWL') return playerType
-  if (playerType === 'ALL' || playerType === 'AR') return 'ALL'
-  return null
-}
-
-/** PostgREST embed types often infer many-to-one as T | T[] */
-function inventoryRow(
-  inv: PlayerInventoryRow | PlayerInventoryRow[] | null | undefined
-): PlayerInventoryRow | null {
-  if (inv == null) return null
-  return Array.isArray(inv) ? (inv[0] ?? null) : inv
-}
+import { formatMoney } from '@/lib/money'
+import {
+  FILTER_PLAYER_TYPES,
+  inventoryRow,
+  type AuctionSortMode,
+  type AuctionState,
+  type BidHistoryEntry,
+  type Player,
+  type PlayerInventoryRow,
+  type RoomUser,
+} from '@/lib/roomTypes'
 
 export default function RoomPage() {
   const params = useParams()
@@ -783,12 +728,6 @@ export default function RoomPage() {
     await fetchAuctionState(roomId)
   }
 
-  function formatMoney(amount: number) {
-    if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(2)} Cr`
-    if (amount >= 100000) return `₹${(amount / 100000).toFixed(2)} L`
-    return `₹${amount}`
-  }
-
   function purseLine(purse: { freeToSpend: number; slotsLeft: number; atCap: boolean }) {
     const free = formatMoney(Math.max(0, purse.freeToSpend))
     if (purse.atCap) return `${free} free to spend, squad full`
@@ -974,97 +913,13 @@ export default function RoomPage() {
     })
   }, [currentUser, allPlayers, auctionState?.current_player_id, minSquadSize, maxSquadSize])
 
-  const squadBoards = useMemo(() => {
-    return allUsers.map((user) => {
-      const buys = allPlayers
-        .filter((p) => p.status === 'SOLD' && p.sold_to_user_id === user.id)
-        .sort((a, b) => {
-          const ta = a.purchased_at ? Date.parse(a.purchased_at) : 0
-          const tb = b.purchased_at ? Date.parse(b.purchased_at) : 0
-          return tb - ta
-        })
-      const counts: Record<(typeof SQUAD_ROLES)[number], number> = { WK: 0, BAT: 0, ALL: 0, BOWL: 0 }
-      for (const player of buys) {
-        const role = squadRole(player.player_type)
-        if (role) counts[role] += 1
-      }
-      return { user, counts, lastBuys: buys.slice(0, 2), size: buys.length }
-    })
-  }, [allUsers, allPlayers])
+  const squadBoards = useMemo(() => buildSquadBoards(allUsers, allPlayers), [allUsers, allPlayers])
 
   const insights = useMemo(
     () => computeInsights({ users: allUsers, players: allPlayers, minSquad: minSquadSize, maxSquad: maxSquadSize }),
     [allUsers, allPlayers, minSquadSize, maxSquadSize]
   )
   const strip = rivalsStrip(insights, currentUser?.id)
-
-  function renderSquadBoards() {
-    return (
-      <div className="grid gap-3 md:grid-cols-2">
-        {squadBoards.map((board) => {
-          const mine = board.user.id === currentUser?.id
-          const noKeeper = board.counts.WK === 0
-          return (
-            <div
-              key={board.user.id}
-              className={`rounded-xl border px-3 py-3 ${
-                mine ? 'border-yellow-500/50 bg-yellow-500/10' : 'border-slate-700 bg-slate-900/50'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="min-w-0">
-                  <div className="font-semibold text-white text-sm truncate">
-                    {board.user.display_name}
-                    {mine ? ' · You' : ''}
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    {formatMoney(board.user.budget - board.user.spent)} left · {board.size}/{maxSquadSize}
-                  </div>
-                </div>
-                {noKeeper && (
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40">
-                    No WK
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {SQUAD_ROLES.map((role) => (
-                  <span
-                    key={role}
-                    className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
-                      role === 'WK' && board.counts[role] === 0
-                        ? 'bg-amber-500/15 text-amber-200'
-                        : 'bg-slate-800 text-slate-200'
-                    }`}
-                  >
-                    {role} {board.counts[role]}
-                  </span>
-                ))}
-              </div>
-              <div className="text-[11px] text-slate-400">
-                {board.lastBuys.length === 0 ? (
-                  'No players yet'
-                ) : (
-                  <>
-                    Last:{' '}
-                    {board.lastBuys.map((player, i) => (
-                      <span key={player.id}>
-                        {i > 0 ? ' · ' : ''}
-                        <span className="text-slate-200">{player.player_name}</span>
-                        {' '}
-                        {squadRole(player.player_type) || player.player_type}
-                        {player.sold_price ? ` ${formatMoney(player.sold_price)}` : ''}
-                      </span>
-                    ))}
-                  </>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
 
   if (loading) {
     return (
@@ -1633,157 +1488,26 @@ export default function RoomPage() {
             <div className="lg:col-span-3 backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-5">
               <h3 className="text-sm font-bold text-white mb-3">Squads so far</h3>
               {strip && <p className="text-xs text-amber-200 mb-3">{strip}</p>}
-              {renderSquadBoards()}
+              <SquadBoards boards={squadBoards} currentUserId={currentUser?.id} maxSquadSize={maxSquadSize} />
             </div>
           )}
         </div>
         )}
 
         {activeTab === 'squad' && (
-          <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
-            <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-              <h2 className="text-2xl font-bold text-white">My Squad</h2>
-              {mySquad.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const rows = [
-                      ['Player', 'Team', 'Type', 'Purchase Price'],
-                      ...mySquad.map(p => [
-                        p.player_name,
-                        p.team || '',
-                        p.player_type,
-                        p.sold_price ? String(p.sold_price) : '0',
-                      ])
-                    ]
-                    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
-                    const blob = new Blob([csv], { type: 'text/csv' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `${currentUser?.display_name || 'squad'}_squad.csv`
-                    a.click()
-                    URL.revokeObjectURL(url)
-                  }}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-500 rounded-xl text-sm font-medium transition"
-                >
-                  Export CSV
-                </button>
-              )}
-            </div>
-
-            {mySquad.length === 0 ? (
-              <div className="text-center py-12 text-slate-400">
-                No players yet. Start bidding!
-              </div>
-            ) : (
-              <>
-                {/* Squad composition summary */}
-                <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {(() => {
-                    const typeCounts: Record<string, number> = {}
-                    mySquad.forEach(p => {
-                      typeCounts[p.player_type] = (typeCounts[p.player_type] || 0) + 1
-                    })
-                    const totalSpent = mySquad.reduce((s, p) => s + (p.sold_price || 0), 0)
-                    const avgPrice = mySquad.length > 0 ? Math.round(totalSpent / mySquad.length) : 0
-                    return (
-                      <>
-                        {Object.entries(typeCounts).map(([type, count]) => (
-                          <div key={type} className="bg-slate-800/60 rounded-xl p-3 border border-slate-700 text-center">
-                            <div className="text-xl font-bold text-white">{count}</div>
-                            <div className="text-xs text-slate-400 mt-0.5">{type}</div>
-                          </div>
-                        ))}
-                        <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700 text-center">
-                          <div className="text-lg font-bold text-yellow-400">{formatMoney(avgPrice)}</div>
-                          <div className="text-xs text-slate-400 mt-0.5">Avg price</div>
-                        </div>
-                        <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700 text-center">
-                          <div className="text-lg font-bold text-red-400">{formatMoney(totalSpent)}</div>
-                          <div className="text-xs text-slate-400 mt-0.5">Total spent</div>
-                        </div>
-                      </>
-                    )
-                  })()}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {mySquad.map(player => (
-                    <div key={player.id} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={player.image_url || 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=80'}
-                          alt={player.player_name}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                        <div className="flex-1">
-                          <div className="font-bold text-white">{player.player_name}</div>
-                          <div className="text-xs text-slate-400">
-                            {[player.team, player.player_type].filter(Boolean).join(' · ') || player.player_type}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between items-center">
-                        <span className="text-xs text-slate-500">Base: {formatMoney(player.base_price)}</span>
-                        <span className="text-green-400 font-bold">{formatMoney(player.sold_price || 0)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <MySquadTab mySquad={mySquad} displayName={currentUser?.display_name} />
         )}
 
         {activeTab === 'leaderboard' && (
-          <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
-            <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-              <h2 className="text-2xl font-bold text-white">Leaderboard</h2>
-              {showHostTools && (
-                <button
-                  type="button"
-                  onClick={() => void handleRestartAuction()}
-                  className="shrink-0 px-4 py-2 bg-amber-950/60 text-amber-100 border border-amber-500/70 rounded-xl hover:bg-amber-900/80 transition text-sm font-semibold"
-                >
-                  Reset auction
-                </button>
-              )}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-800 text-slate-400">
-                  <tr>
-                    <th className="p-3 text-left">Team</th>
-                    <th className="p-3 text-right">Spent</th>
-                    <th className="p-3 text-right">Remaining</th>
-                    <th className="p-3 text-right">Squad (min {minSquadSize})</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-700">
-                  {allUsers.map(user => (
-                    <tr key={user.id} className={user.id === currentUser?.id ? 'bg-yellow-500/10' : ''}>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-white">{user.display_name}</span>
-                          {user.is_admin && (
-                            <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded">ADMIN</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3 text-right text-red-400">{formatMoney(user.spent)}</td>
-                      <td className="p-3 text-right text-green-400">{formatMoney(user.budget - user.spent)}</td>
-                      <td className="p-3 text-right text-white">{user.squad_count} / {maxSquadSize}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-8">
-              <h3 className="text-sm font-bold text-white mb-3">Squads so far</h3>
-              {renderSquadBoards()}
-            </div>
-          </div>
+          <LeaderboardTab
+            allUsers={allUsers}
+            currentUserId={currentUser?.id}
+            minSquadSize={minSquadSize}
+            maxSquadSize={maxSquadSize}
+            showHostTools={showHostTools}
+            onReset={() => void handleRestartAuction()}
+            boards={squadBoards}
+          />
         )}
 
         {activeTab === 'insights' && (
@@ -1794,107 +1518,16 @@ export default function RoomPage() {
         )}
 
         {activeTab === 'players' && (
-          <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-              <h2 className="text-2xl font-bold text-white">All Players</h2>
-              <div className="flex flex-wrap gap-2 items-center">
-                <input
-                  type="text"
-                  placeholder="Search player or team…"
-                  value={playerSearch}
-                  onChange={e => setPlayerSearch(e.target.value)}
-                  className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-1.5 text-white text-sm placeholder:text-slate-500 w-48"
-                />
-                <select
-                  value={playerStatusFilter}
-                  onChange={e => setPlayerStatusFilter(e.target.value)}
-                  className="rounded-lg bg-slate-800 border border-slate-600 px-3 py-1.5 text-white text-sm"
-                >
-                  <option value="ALL">All status</option>
-                  <option value="UNSOLD">Unsold</option>
-                  <option value="SOLD">Sold</option>
-                </select>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-800 text-slate-400">
-                  <tr>
-                    <th className="p-3 text-left">Player</th>
-                    <th className="p-3 text-left">Team</th>
-                    <th className="p-3 text-left">Type</th>
-                    <th className="p-3 text-left">Status</th>
-                    <th className="p-3 text-right">Price</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-700">
-                  {allPlayers
-                    .filter(p => {
-                      const q = playerSearch.toLowerCase()
-                      const matchSearch = !q || p.player_name.toLowerCase().includes(q) || (p.team || '').toLowerCase().includes(q)
-                      const matchStatus = playerStatusFilter === 'ALL' || p.status === playerStatusFilter
-                      return matchSearch && matchStatus
-                    })
-                    .map(player => {
-                    const lotPurse = currentUser
-                      ? purseLock({
-                          budget: currentUser.budget,
-                          spent: currentUser.spent,
-                          squadCount: currentUser.squad_count,
-                          minSquadSize,
-                          maxSquadSize,
-                          otherUnsoldBasePrices: allPlayers
-                            .filter((p) => p.status === 'UNSOLD' && p.id !== player.id)
-                            .map((p) => p.base_price),
-                        })
-                      : null
-                    const canAfford = player.status === 'UNSOLD' && !!lotPurse && player.base_price <= lotPurse.freeToSpend
-                    const tooExpensive = player.status === 'UNSOLD' && !!lotPurse && player.base_price > lotPurse.freeToSpend
-                    return (
-                    <tr key={player.id} className={tooExpensive ? 'opacity-50' : ''}>
-                      <td className="p-3">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={player.image_url || 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=40'}
-                            alt={player.player_name}
-                            className="w-8 h-8 rounded-full object-cover"
-                          />
-                          <span className="text-white">{player.player_name}</span>
-                        </div>
-                      </td>
-                      <td className="p-3 text-slate-300">{player.team || '—'}</td>
-                      <td className="p-3 text-slate-300">{player.player_type}</td>
-                      <td className="p-3">
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          player.status === 'SOLD' ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'
-                        }`}>
-                          {player.status}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        {player.status === 'SOLD' ? (
-                          <div>
-                            <div className="text-green-400 font-bold">{formatMoney(player.sold_price || 0)}</div>
-                            {player.sold_to && <div className="text-xs text-slate-400">{player.sold_to}</div>}
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-end gap-0.5">
-                            <span className={canAfford ? 'text-slate-300' : 'text-red-400'}>
-                              {formatMoney(player.base_price)}
-                            </span>
-                            {tooExpensive && (
-                              <span className="text-[10px] text-red-500">Out of budget</span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <PlayersTab
+            allPlayers={allPlayers}
+            currentUser={currentUser}
+            minSquadSize={minSquadSize}
+            maxSquadSize={maxSquadSize}
+            playerSearch={playerSearch}
+            onSearch={setPlayerSearch}
+            statusFilter={playerStatusFilter}
+            onStatusFilter={setPlayerStatusFilter}
+          />
         )}
       </div>
     </div>
