@@ -18,6 +18,7 @@ npm run dev                        # http://localhost:3000
 | `npm run lint` / `npm run typecheck` | ESLint / `tsc --noEmit` |
 | `npm test` | Vitest unit tests (rules and insights) |
 | `npm run build` | Production build (works without Supabase env) |
+| `npm run db:test` | Database rule tests against `SUPABASE_DB_URL` (rolled back, nothing persists) |
 | `npm run db:apply` | Apply `supabase/*.sql` in order, in one transaction. Add `-- --dry` to roll back |
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and build on every push and PR.

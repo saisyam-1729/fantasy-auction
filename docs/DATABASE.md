@@ -32,4 +32,4 @@ Production is the only database today. Prefer a second Supabase project for stag
 
 ## Testing database rules
 
-`place_auction_bid` and the host functions need a signed-in user (`auth.uid()`). Test them in a transaction that inserts temporary `auth.users`, sets `request.jwt.claim.sub`, calls the function, and rolls back, so nothing persists.
+`place_auction_bid` and the host functions need a signed-in user (`auth.uid()`). `npm run db:test` runs the rule tests in `scripts/db-tests/` (87 checks: bid rules, security attacks, auto-sell, undo). Each file runs in a single transaction that inserts temporary `auth.users`, sets `request.jwt.claim.sub` to act as them, and always rolls back, so nothing persists. They read `SUPABASE_DB_URL`; point it at staging. They are not part of CI because CI has no database secret.
