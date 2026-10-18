@@ -9,7 +9,8 @@
     "lint": "eslint",
     "import:ipl2026": "node scripts/generate-ipl-2026-seed.cjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:apply": "node scripts/db-apply.cjs"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -29,6 +30,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
+    "pg": "^8.23.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^3.2.7",
