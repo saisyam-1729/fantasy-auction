@@ -1,6 +1,7 @@
 'use client'
 
 import { formatMoney } from '@/lib/money'
+import PlayerAvatar from './PlayerAvatar'
 import { purseLock } from '@/lib/purse'
 import type { Player, RoomUser } from '@/lib/roomTypes'
 
@@ -84,11 +85,7 @@ export default function PlayersTab({
               <tr key={player.id} className={tooExpensive ? 'opacity-50' : ''}>
                 <td className="p-3">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={player.image_url || 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=40'}
-                      alt={player.player_name}
-                      className="w-8 h-8 rounded-full object-cover"
-                    />
+                    <PlayerAvatar src={player.image_url} name={player.player_name} size={32} className="w-8 h-8 rounded-full" />
                     <span className="text-white">{player.player_name}</span>
                   </div>
                 </td>

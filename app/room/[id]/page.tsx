@@ -13,6 +13,7 @@ import { computeInsights, rivalsStrip } from '@/lib/insights'
 import InsightsPanel from '@/components/InsightsPanel'
 import SquadBoards from '@/components/room/SquadBoards'
 import ResultsPanel from '@/components/room/ResultsPanel'
+import PlayerAvatar from '@/components/room/PlayerAvatar'
 import ConnectionBanner, { type ConnectionState } from '@/components/room/ConnectionBanner'
 import MySquadTab from '@/components/room/MySquadTab'
 import LeaderboardTab from '@/components/room/LeaderboardTab'
@@ -795,6 +796,7 @@ export default function RoomPage() {
   }, [allUsers, auctionState?.is_active])
 
   const consensusAutoStartRef = useRef(false)
+  const lastLotKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (loading || !roomId || !auctionState) return
@@ -844,10 +846,15 @@ export default function RoomPage() {
         filter: `room_id=eq.${roomId}`
       }, (payload) => {
         void fetchAuctionStateRef.current(roomId)
-        // Refresh player/squad data so non-host users see sold players immediately
-        void fetchAllPlayersRef.current(roomId)
-        // Refresh bid history for the current player
-        const newRecord = (payload as { new?: { current_player_id?: string } }).new
+        const newRecord = (payload as { new?: { current_player_id?: string; is_active?: boolean } }).new
+        // The player list only changes when the lot moves on (sale, pass, start, end, undo),
+        // not on every bid or pause, so skip the heavy refetch otherwise.
+        const lotKey = `${newRecord?.is_active}:${newRecord?.current_player_id}`
+        if (lotKey !== lastLotKeyRef.current) {
+          lastLotKeyRef.current = lotKey
+          void fetchAllPlayersRef.current(roomId)
+        }
+        // Bid history is per lot and small, refresh on every bid
         const pid = newRecord?.current_player_id
         if (pid) void fetchBidHistoryRef.current(pid)
       })
@@ -909,7 +916,6 @@ export default function RoomPage() {
       hostMinBase,
       hostMaxBase
     )
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allPlayers, auctionState?.current_player_id, hostSort, hostTypes, hostMinBase, hostMaxBase])
 
   /** Backup if Realtime publication is missing: still sync lobby every few seconds. */
@@ -945,8 +951,9 @@ export default function RoomPage() {
       return
     }
     if (auctionState.is_paused) return  // freeze — don't clear, just stop ticking
+    const lastBidTime = auctionState.last_bid_time
     function tick() {
-      const elapsed = Math.floor((Date.now() - new Date(auctionState!.last_bid_time!).getTime()) / 1000)
+      const elapsed = Math.floor((Date.now() - new Date(lastBidTime).getTime()) / 1000)
       const remaining = Math.max(0, BID_TIMEOUT_SECONDS - elapsed)
       setCountdown(remaining)
     }
@@ -1397,10 +1404,11 @@ export default function RoomPage() {
 
                   <div className="flex justify-center mb-6">
                     <div className="w-28 h-28 sm:w-40 sm:h-40 rounded-full border-4 border-yellow-500 overflow-hidden bg-slate-800">
-                      <img
-                        src={currentPlayer.image_url || 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=200'}
-                        alt={currentPlayer.player_name}
-                        className="w-full h-full object-cover"
+                      <PlayerAvatar
+                        src={currentPlayer.image_url}
+                        name={currentPlayer.player_name}
+                        size={160}
+                        className="w-full h-full"
                       />
                     </div>
                   </div>
@@ -1503,10 +1511,11 @@ export default function RoomPage() {
                         {upcomingLots.map((p, i) => (
                           <div key={p.id} className="flex items-center gap-3 bg-slate-800/40 rounded-lg px-3 py-2">
                             <span className="text-slate-500 text-xs w-4 shrink-0">{i + 1}</span>
-                            <img
-                              src={p.image_url || 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=40'}
-                              alt={p.player_name}
-                              className="w-7 h-7 rounded-full object-cover shrink-0"
+                            <PlayerAvatar
+                              src={p.image_url}
+                              name={p.player_name}
+                              size={28}
+                              className="w-7 h-7 rounded-full shrink-0"
                             />
                             <div className="flex-1 min-w-0">
                               <div className="text-white text-xs font-medium truncate">{p.player_name}</div>

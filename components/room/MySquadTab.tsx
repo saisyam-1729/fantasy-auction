@@ -1,6 +1,7 @@
 'use client'
 
 import { formatMoney } from '@/lib/money'
+import PlayerAvatar from './PlayerAvatar'
 import type { Player } from '@/lib/roomTypes'
 
 export default function MySquadTab({
@@ -83,11 +84,7 @@ export default function MySquadTab({
             {mySquad.map(player => (
               <div key={player.id} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
                 <div className="flex items-center gap-3">
-                  <img
-                    src={player.image_url || 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=80'}
-                    alt={player.player_name}
-                    className="w-12 h-12 rounded-full object-cover"
-                  />
+                  <PlayerAvatar src={player.image_url} name={player.player_name} size={48} className="w-12 h-12 rounded-full" />
                   <div className="flex-1">
                     <div className="font-bold text-white">{player.player_name}</div>
                     <div className="text-xs text-slate-400">
