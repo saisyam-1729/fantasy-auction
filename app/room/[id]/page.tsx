@@ -1059,12 +1059,13 @@ export default function RoomPage() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto mb-6 flex gap-2 overflow-x-auto">
+      <div className="max-w-7xl mx-auto mb-6 flex gap-2 overflow-x-auto pb-1" role="navigation" aria-label="Room sections">
         {(['auction', 'squad', 'leaderboard', 'players', 'insights'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-6 py-2 rounded-full font-medium whitespace-nowrap transition ${
+            aria-current={activeTab === tab ? 'page' : undefined}
+            className={`px-4 sm:px-6 py-2 rounded-full font-medium whitespace-nowrap shrink-0 transition ${
               activeTab === tab
                 ? 'bg-yellow-500 text-slate-900'
                 : 'backdrop-blur-xl bg-white/10 text-white hover:bg-white/20'
@@ -1098,7 +1099,7 @@ export default function RoomPage() {
                 </button>
               </div>
             )}
-            <div className="lg:col-span-2 backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
+            <div className="lg:col-span-2 backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-4 sm:p-8">
               {!auctionState?.is_active && allPlayers.some(p => p.status === 'SOLD') && (
                 <div className="text-center py-10 px-2">
                   <div className="text-6xl mb-4">🏆</div>
@@ -1324,7 +1325,7 @@ export default function RoomPage() {
                   </div>
 
                   <div className="flex justify-center mb-6">
-                    <div className="w-40 h-40 rounded-full border-4 border-yellow-500 overflow-hidden bg-slate-800">
+                    <div className="w-28 h-28 sm:w-40 sm:h-40 rounded-full border-4 border-yellow-500 overflow-hidden bg-slate-800">
                       <img
                         src={currentPlayer.image_url || 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=200'}
                         alt={currentPlayer.player_name}
@@ -1333,7 +1334,7 @@ export default function RoomPage() {
                     </div>
                   </div>
 
-                  <h2 className="text-4xl font-bold text-white text-center mb-2">
+                  <h2 className="text-2xl sm:text-4xl font-bold text-white text-center mb-2">
                     {currentPlayer.player_name}
                   </h2>
                   <div className="text-center text-slate-300 mb-8">
@@ -1341,9 +1342,9 @@ export default function RoomPage() {
                     {currentPlayer.player_type} • Base: {formatMoney(currentPlayer.base_price)}
                   </div>
 
-                  <div className="bg-slate-800/50 rounded-2xl p-6 mb-6 border border-slate-700">
+                  <div className="bg-slate-800/50 rounded-2xl p-4 sm:p-6 mb-6 border border-slate-700">
                     <div className="text-slate-400 text-xs uppercase text-center mb-2">Current Bid</div>
-                    <div className="text-5xl font-black text-white text-center mb-2">
+                    <div className="text-4xl sm:text-5xl font-black text-white text-center mb-2" aria-live="polite" aria-atomic="true">
                       {formatMoney(auctionState.current_bid)}
                     </div>
                     <div className="text-center mb-4">
@@ -1393,11 +1394,11 @@ export default function RoomPage() {
                     const locksPurse = nextPrice > freeToSpend
                     const holdBid = auctionState.top_bidder_id === currentUser?.id
                     return (
-                      <div className="mb-4">
+                      <div className="mb-4 sticky bottom-3 z-10 rounded-2xl bg-slate-900/80 backdrop-blur p-2 shadow-lg shadow-black/40 lg:static lg:bg-transparent lg:p-0 lg:shadow-none">
                         <button
                           onClick={() => placeBid(raise)}
                           disabled={holdBid || auctionState.is_paused || locksPurse}
-                          className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full py-4 min-h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {holdBid
                             ? 'You hold the highest bid'
@@ -1415,7 +1416,7 @@ export default function RoomPage() {
                   })()}
 
                   {bidMessage && (
-                    <div className={`text-center text-sm font-medium ${
+                    <div role="status" aria-live="polite" className={`text-center text-sm font-medium ${
                       bidMessage.includes('success') || bidMessage.includes('placed') ? 'text-green-400' : 'text-red-400'
                     }`}>
                       {bidMessage}

@@ -11,7 +11,7 @@ export default function MySquadTab({
   displayName?: string
 }) {
   return (
-    <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
+    <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-4 sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <h2 className="text-2xl font-bold text-white">My Squad</h2>
         {mySquad.length > 0 && (

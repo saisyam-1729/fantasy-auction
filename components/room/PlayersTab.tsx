@@ -24,7 +24,7 @@ export default function PlayersTab({
   onStatusFilter: (v: string) => void
 }) {
   return (
-    <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8">
+    <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-4 sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h2 className="text-2xl font-bold text-white">All Players</h2>
         <div className="flex flex-wrap gap-2 items-center">
