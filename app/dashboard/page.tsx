@@ -225,82 +225,22 @@ export default function DashboardPage() {
     setJoinMessage('')
 
     try {
-      // Find room
-      const { data: room, error: roomError } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('room_id', joinRoomId)
-        .eq('room_key', joinRoomKey)
-        .maybeSingle()
+      // The database checks the key, capacity and membership, and adds the user.
+      const { data: roomUuid, error: joinError } = await supabase.rpc('join_room', {
+        p_room_id: joinRoomId.trim(),
+        p_room_key: joinRoomKey.trim(),
+      })
 
-      if (roomError || !room) {
-        setJoinMessage('Invalid Room ID or Room Key')
+      if (joinError || !roomUuid) {
+        const msg = joinError?.message ?? ''
+        const known = /Invalid Room ID|Room is full/i.test(msg)
+        setJoinMessage(known ? msg : 'Error joining room: ' + (msg || 'unknown error'))
         setJoining(false)
         return
       }
 
-      // Check if user already in room - use array query instead
-      const { data: existingUsers } = await supabase
-        .from('room_users')
-        .select('id, display_name')
-        .eq('room_id', room.id)
-        .eq('user_id', user?.id)
-
-      // If user already exists in room (array has items), let them rejoin
-      if (existingUsers && existingUsers.length > 0) {
-        console.log('User already in room, rejoining...')
-        setJoinMessage('Welcome back! Rejoining room...')
-        setJoining(false)
-        // Wait a bit before redirecting
-        await new Promise(resolve => setTimeout(resolve, 800))
-        router.push(`/room/${room.id}`)
-        return
-      }
-
-      if (room.current_players_count >= room.max_players) {
-        setJoinMessage(`Room is full (max ${room.max_players} players)`)
-        setJoining(false)
-        return
-      }
-
-      // Add user to room (only if they don't exist)
-      const username = user?.user_metadata?.username || user?.email?.split('@')[0] || 'user'
-      
-      console.log('Attempting to insert new user into room...')
-      const { error: joinError } = await supabase
-        .from('room_users')
-        .insert({
-          room_id: room.id,
-          user_id: user?.id,
-          username: username,
-          is_admin: false,
-          display_name: `${room.room_id}_${username}`,
-          ready_to_start: false,
-        })
-
-      if (joinError) {
-        // Check if it's a duplicate key error
-        if (joinError.code === '23505') {
-          setJoinMessage('You are already in this room! Redirecting...')
-          await new Promise(resolve => setTimeout(resolve, 800))
-          setJoining(false)
-          router.push(`/room/${room.id}`)
-          return
-        } else {
-          setJoinMessage('Error joining room: ' + joinError.message)
-          setJoining(false)
-          return
-        }
-      }
-
-      console.log('Successfully joined room')
-      setJoinMessage('Successfully joined room!')
-      
-      // Wait for database to propagate before redirecting
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setJoining(false)
-      router.push(`/room/${room.id}`)
-
+      setJoinMessage('Joined! Opening room...')
+      router.push(`/room/${roomUuid}`)
     } catch (error: unknown) {
       console.error('Catch block error:', error)
       setJoinMessage('Error: ' + (error instanceof Error ? error.message : String(error)))
