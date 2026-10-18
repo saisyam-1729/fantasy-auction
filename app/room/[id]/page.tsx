@@ -12,6 +12,7 @@ import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD, purseLock } from '@/lib/purse'
 import { computeInsights, rivalsStrip } from '@/lib/insights'
 import InsightsPanel from '@/components/InsightsPanel'
 import SquadBoards from '@/components/room/SquadBoards'
+import ConnectionBanner, { type ConnectionState } from '@/components/room/ConnectionBanner'
 import MySquadTab from '@/components/room/MySquadTab'
 import LeaderboardTab from '@/components/room/LeaderboardTab'
 import PlayersTab from '@/components/room/PlayersTab'
@@ -61,6 +62,9 @@ export default function RoomPage() {
   const [minSquadSize, setMinSquadSize] = useState(DEFAULT_MIN_SQUAD)
   const [maxSquadSize, setMaxSquadSize] = useState(DEFAULT_MAX_SQUAD)
   const [autoHammer, setAutoHammer] = useState(false)
+  const [connection, setConnection] = useState<ConnectionState>('live')
+  const connectionRef = useRef<ConnectionState>('live')
+  connectionRef.current = connection
   const [hostMinSquad, setHostMinSquad] = useState(String(DEFAULT_MIN_SQUAD))
   const [hostMaxSquad, setHostMaxSquad] = useState(String(DEFAULT_MAX_SQUAD))
   const [squadSizeMessage, setSquadSizeMessage] = useState('')
@@ -754,6 +758,17 @@ export default function RoomPage() {
   const fetchSquadSizesRef = useRef(fetchSquadSizes)
   fetchSquadSizesRef.current = fetchSquadSizes
 
+  /** Refetch everything the room shows. Used after a reconnect or when the tab wakes. */
+  function resyncAll() {
+    if (!roomId) return
+    void fetchAuctionStateRef.current(roomId)
+    void fetchRoomUsersRef.current(roomId)
+    void fetchAllPlayersRef.current(roomId)
+    void fetchSquadSizesRef.current(roomId)
+  }
+  const resyncRef = useRef(resyncAll)
+  resyncRef.current = resyncAll
+
   const consensusKey = useMemo(() => {
     const sig = allUsers
       .map((u) => `${u.id}:${u.ready_to_start ? 1 : 0}`)
@@ -835,9 +850,33 @@ export default function RoomPage() {
       }, () => {
         void fetchSquadSizesRef.current(roomId)
       })
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          // Rejoined after a drop: catch up on anything missed.
+          if (connectionRef.current !== 'live') resyncRef.current()
+          setConnection(navigator.onLine ? 'live' : 'offline')
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setConnection(navigator.onLine ? 'reconnecting' : 'offline')
+        }
+      })
+
+    const onOffline = () => setConnection('offline')
+    const onOnline = () => {
+      setConnection('reconnecting')
+      resyncRef.current()
+    }
+    // A sleeping phone tab misses events; refetch when it wakes up.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') resyncRef.current()
+    }
+    window.addEventListener('offline', onOffline)
+    window.addEventListener('online', onOnline)
+    document.addEventListener('visibilitychange', onVisible)
 
     return () => {
+      window.removeEventListener('offline', onOffline)
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVisible)
       supabase.removeChannel(auctionChannel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- channel per roomId; handlers use refs
@@ -959,6 +998,7 @@ export default function RoomPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
+      <ConnectionBanner state={connection} />
       <div className="max-w-7xl mx-auto mb-6">
         <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-4">
           <div className="flex flex-col gap-3">
@@ -1397,7 +1437,7 @@ export default function RoomPage() {
                       <div className="mb-4 sticky bottom-3 z-10 rounded-2xl bg-slate-900/80 backdrop-blur p-2 shadow-lg shadow-black/40 lg:static lg:bg-transparent lg:p-0 lg:shadow-none">
                         <button
                           onClick={() => placeBid(raise)}
-                          disabled={holdBid || auctionState.is_paused || locksPurse}
+                          disabled={holdBid || auctionState.is_paused || locksPurse || connection === 'offline'}
                           className="w-full py-4 min-h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {holdBid
