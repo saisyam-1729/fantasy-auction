@@ -12,6 +12,7 @@ import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD, purseLock } from '@/lib/purse'
 import { computeInsights, rivalsStrip } from '@/lib/insights'
 import InsightsPanel from '@/components/InsightsPanel'
 import SquadBoards from '@/components/room/SquadBoards'
+import ResultsPanel from '@/components/room/ResultsPanel'
 import ConnectionBanner, { type ConnectionState } from '@/components/room/ConnectionBanner'
 import MySquadTab from '@/components/room/MySquadTab'
 import LeaderboardTab from '@/components/room/LeaderboardTab'
@@ -617,6 +618,22 @@ export default function RoomPage() {
     await Promise.all([fetchAuctionState(roomId), fetchRoomUsers(roomId), fetchAllPlayers(roomId)])
   }
 
+  async function hostUndoLastSale() {
+    if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
+    if (
+      !window.confirm(
+        'Undo the last sale? The buyer gets the money and the slot back, and that lot reopens (paused) at the price it sold for. Any bids on the current lot are discarded.'
+      )
+    )
+      return
+    const { error } = await supabase.rpc('auction_undo_last_sale', { p_room_id: roomId })
+    if (error) {
+      alert(error.message)
+      return
+    }
+    await Promise.all([fetchAuctionState(roomId), fetchRoomUsers(roomId), fetchAllPlayers(roomId)])
+  }
+
   async function toggleReady() {
     if (!roomId || !currentUser || auctionState?.is_active) return
     const next = !currentUser.ready_to_start
@@ -1141,12 +1158,9 @@ export default function RoomPage() {
             )}
             <div className="lg:col-span-2 backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-4 sm:p-8">
               {!auctionState?.is_active && allPlayers.some(p => p.status === 'SOLD') && (
-                <div className="text-center py-10 px-2">
-                  <div className="text-6xl mb-4">🏆</div>
-                  <h2 className="text-3xl font-bold text-white mb-3">Auction Complete</h2>
-                  <p className="text-slate-300 mb-6">
-                    All available lots have been sold or passed. Check the Leaderboard and All Players tabs for results.
-                  </p>
+                <div className="py-4 px-1">
+                  <ResultsPanel insights={insights} money={formatMoney} myUserId={currentUser?.id} />
+                  <div className="text-center mt-6">
                   {showHostTools && (
                     <button
                       type="button"
@@ -1156,6 +1170,16 @@ export default function RoomPage() {
                       Reset & run again
                     </button>
                   )}
+                  {showHostTools && (
+                    <button
+                      type="button"
+                      onClick={() => void hostUndoLastSale()}
+                      className="ml-3 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-amber-200 font-semibold rounded-xl border border-amber-500/40 transition"
+                    >
+                      ↩ Undo last sale
+                    </button>
+                  )}
+                  </div>
                 </div>
               )}
 
@@ -1359,6 +1383,13 @@ export default function RoomPage() {
                           className="px-4 py-2 rounded-xl bg-slate-600 hover:bg-slate-500 text-white text-sm font-semibold border border-slate-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           Pass — no sale
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void hostUndoLastSale()}
+                          className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-200 text-sm font-semibold border border-amber-500/40"
+                        >
+                          ↩ Undo last sale
                         </button>
                       </div>
                     )}

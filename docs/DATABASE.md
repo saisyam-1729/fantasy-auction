@@ -19,6 +19,7 @@
 | 7 | `squad_visibility.sql` | `user_squads.purchased_at`, members can read all squads |
 | 8 | `security_hardening.sql` | locked-down RLS, `join_room`, guarded `initialize_room_players` |
 | 9 | `auto_hammer.sql` | optional server-side auto-sell |
+| 10 | `undo_last_sale.sql` | host "Undo last sale" |
 
 Order matters because files 3 and 5 also define `place_auction_bid`; file 6 must be its last definition. Files 3, 5 and 9 define `auction_hammer_advance`; file 9 is the last. Do not run an earlier file alone against a live database.
 
