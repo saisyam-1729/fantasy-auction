@@ -1,4 +1,4 @@
-import { nextBidIncrement } from './bidSlabs'
+import { nextBidIncrement, type SlabConfig } from './bidSlabs'
 
 export type BidButtonState = {
   /** Rupees to add to the current bid (the next slab step). */
@@ -26,8 +26,10 @@ export function bidButtonState(args: {
   atCap: boolean
   remaining: number
   freeToSpend: number
+  /** The room's bid steps; omit for the defaults. */
+  slabs?: SlabConfig
 }): BidButtonState {
-  const raise = nextBidIncrement(args.currentBid)
+  const raise = nextBidIncrement(args.currentBid, args.slabs)
   const nextPrice = args.currentBid + raise
   let reason: BidButtonState['reason'] = null
   if (args.holdsBid) reason = 'holding'

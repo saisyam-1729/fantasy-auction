@@ -7,7 +7,8 @@ import {
   MAX_PLAYERS_IN_ROOM,
   readyVotesNeededToStart,
 } from '@/lib/auctionConsensus'
-import { nextBidIncrement } from '@/lib/bidSlabs'
+import { DEFAULT_SLABS, describeSlabs, nextBidIncrement, parseSlabs, type SlabConfig } from '@/lib/bidSlabs'
+import { DEFAULT_TIMER_SECONDS } from '@/lib/roomSettings'
 import { bidButtonLabel, bidButtonState } from '@/lib/bidButton'
 import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD, purseLock } from '@/lib/purse'
 import { computeInsights, rivalsStrip } from '@/lib/insights'
@@ -75,6 +76,9 @@ export default function RoomPage() {
   const [maxSquadSize, setMaxSquadSize] = useState(DEFAULT_MAX_SQUAD)
   const [autoHammer, setAutoHammer] = useState(false)
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null)
+  /** This room's lot timer and bid steps (the host chose them when creating the room). */
+  const [bidTimerSeconds, setBidTimerSeconds] = useState(DEFAULT_TIMER_SECONDS)
+  const [slabs, setSlabs] = useState<SlabConfig>(DEFAULT_SLABS)
   /** The lot order saved on the room, as everyone sees it (hostSort is the host's draft). */
   const [roomSort, setRoomSort] = useState<AuctionSortMode>('created_asc')
   const leavingRef = useRef(false)
@@ -164,6 +168,7 @@ export default function RoomPage() {
 
       setAutoHammer(Boolean((room as { auto_hammer?: boolean }).auto_hammer))
       setOwnerUserId(room.admin_user_id != null ? String(room.admin_user_id) : null)
+      applyRoomSettings(room as { bid_timer_seconds?: unknown; slab_config?: unknown })
       const roomSquad = room as { min_squad_size?: number; max_squad_size?: number }
       const loadedMin = Number(roomSquad.min_squad_size)
       const loadedMax = Number(roomSquad.max_squad_size)
@@ -573,12 +578,18 @@ export default function RoomPage() {
     setHostFilterMessage('Saved. Next lots use this order & filters.')
   }
 
+  function applyRoomSettings(room: { bid_timer_seconds?: unknown; slab_config?: unknown }) {
+    const t = Number(room.bid_timer_seconds)
+    setBidTimerSeconds(Number.isInteger(t) && t >= 10 && t <= 120 ? t : DEFAULT_TIMER_SECONDS)
+    setSlabs(parseSlabs(room.slab_config))
+  }
+
   async function fetchSquadSizes(id?: string) {
     const targetRoomId = id || roomId
     if (!targetRoomId) return
     const { data, error } = await supabase
       .from('rooms')
-      .select('min_squad_size, max_squad_size, admin_user_id, auction_filters')
+      .select('min_squad_size, max_squad_size, admin_user_id, auction_filters, bid_timer_seconds, slab_config')
       .eq('id', targetRoomId)
       .maybeSingle()
     if (!data) {
@@ -591,6 +602,7 @@ export default function RoomPage() {
       return
     }
     setOwnerUserId(data.admin_user_id != null ? String(data.admin_user_id) : null)
+    applyRoomSettings(data)
     const savedSort = (data.auction_filters as { sort?: unknown } | null)?.sort
     if (savedSort === 'base_price_asc' || savedSort === 'base_price_desc' || savedSort === 'created_asc' || savedSort === 'sets') {
       setRoomSort(savedSort)
@@ -802,7 +814,7 @@ export default function RoomPage() {
 
     setBidMessage('')
 
-    const legalIncrement = nextBidIncrement(auctionState.current_bid)
+    const legalIncrement = nextBidIncrement(auctionState.current_bid, slabs)
     if (amount !== legalIncrement) {
       setBidMessage('Bid must be the next slab step')
       setTimeout(() => setBidMessage(''), 3000)
@@ -1069,7 +1081,7 @@ export default function RoomPage() {
     },
   })
 
-  const BID_TIMEOUT_SECONDS = 30
+  const BID_TIMEOUT_SECONDS = bidTimerSeconds
 
   /** Counts down from BID_TIMEOUT_SECONDS after the last bid. Freezes when paused. */
   const countdown = useCountdown({
@@ -1132,6 +1144,7 @@ export default function RoomPage() {
           atCap: Boolean(myPurse?.atCap),
           remaining: myPurse?.remaining ?? 0,
           freeToSpend: myPurse?.freeToSpend ?? 0,
+          slabs,
         })
       : null
   const showMiniBar = activeTab !== 'auction' && Boolean(bidBtn && auctionState?.is_active && currentPlayer)
@@ -1175,7 +1188,7 @@ export default function RoomPage() {
                 <h1 className="text-2xl font-bold text-white">🏏 Auction Room</h1>
                 <p className="text-slate-300 text-sm flex flex-wrap items-center gap-2">
                   <span>
-                    {allUsers.length} Players • Squad {minSquadSize}–{maxSquadSize} • {currentUser?.display_name}
+                    {allUsers.length} Players • Squad {minSquadSize}–{maxSquadSize} • {bidTimerSeconds}s timer • {currentUser?.display_name}
                   </span>
                   {(currentUser?.is_admin || canUseHostControls) && (
                     <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40">
@@ -1687,7 +1700,7 @@ export default function RoomPage() {
                         {bidButtonLabel(bidBtn, formatMoney)}
                       </button>
                       <p className="text-center text-xs text-slate-500 mt-2">
-                        Under ₹2 Cr the raise is ₹10 L. From ₹2 Cr to ₹5 Cr it is ₹20 L. Above ₹5 Cr it is ₹25 L.
+                        {describeSlabs(slabs, formatMoney)}
                       </p>
                     </div>
                   )}

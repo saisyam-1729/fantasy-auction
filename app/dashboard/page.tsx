@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD } from '@/lib/purse'
+import { DEFAULT_FORM, parseSettingsForm, type SettingsForm } from '@/lib/roomSettings'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
 
@@ -27,6 +28,7 @@ export default function DashboardPage() {
   const [minSquadSize, setMinSquadSize] = useState(String(DEFAULT_MIN_SQUAD))
   const [maxSquadSize, setMaxSquadSize] = useState(String(DEFAULT_MAX_SQUAD))
   const [autoHammer, setAutoHammer] = useState(false)
+  const [settingsForm, setSettingsForm] = useState<SettingsForm>(DEFAULT_FORM)
   const [creating, setCreating] = useState(false)
   const [createMessage, setCreateMessage] = useState('')
   
@@ -126,6 +128,13 @@ export default function DashboardPage() {
       return
     }
 
+    const parsed = parseSettingsForm(settingsForm)
+    if (!parsed.ok) {
+      setCreateMessage(parsed.error)
+      return
+    }
+    const roomSettings = parsed.settings
+
     setCreating(true)
     setCreateMessage('')
 
@@ -149,6 +158,9 @@ export default function DashboardPage() {
           min_squad_size: minSquad,
           max_squad_size: maxSquad,
           auto_hammer: autoHammer,
+          budget: roomSettings.budget,
+          bid_timer_seconds: roomSettings.timerSeconds,
+          slab_config: roomSettings.slabs,
         })
         .select()
         .single()
@@ -394,6 +406,96 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-400 -mt-2">
                 Default is 12 to 15. The purse must cover the minimum. Slots above that do not lock money.
               </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Starting budget (Cr)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={settingsForm.budgetCr}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, budgetCr: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Lot timer (seconds)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={settingsForm.timerSeconds}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, timerSeconds: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+              <details className="rounded-xl border border-slate-600 bg-slate-800/30 px-3 py-2">
+                <summary className="cursor-pointer text-sm font-medium text-slate-300">Bid steps (advanced)</summary>
+                <p className="mt-2 text-xs text-slate-400">
+                  Below the first threshold each bid raises by step 1, up to the second threshold by step 2, and above it
+                  by step 3. A step that would cross a threshold lands exactly on it. The defaults are the IPL-style
+                  10 L, 20 L and 25 L.
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">First threshold (Cr)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={settingsForm.t1Cr}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, t1Cr: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Second threshold (Cr)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={settingsForm.t2Cr}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, t2Cr: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Step 1 (lakh)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={settingsForm.s1L}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, s1L: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Step 2 (lakh)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={settingsForm.s2L}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, s2L: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Step 3 (lakh)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={settingsForm.s3L}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, s3L: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                </div>
+              </details>
 
               <label className="flex items-start gap-3 text-sm text-slate-300 cursor-pointer">
                 <input

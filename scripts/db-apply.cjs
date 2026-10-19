@@ -29,6 +29,7 @@ const ORDER = [
   'cohost.sql',
   'cleanup_rooms.sql',
   'auction_sets.sql',
+  'room_settings.sql',
 ]
 
 const root = path.join(__dirname, '..')
