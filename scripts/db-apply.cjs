@@ -26,6 +26,7 @@ const ORDER = [
   'undo_last_sale.sql',
   'indexes.sql',
   'pause_close_away.sql',
+  'cohost.sql',
 ]
 
 const root = path.join(__dirname, '..')

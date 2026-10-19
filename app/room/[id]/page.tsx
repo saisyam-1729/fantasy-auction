@@ -15,6 +15,7 @@ import InsightsPanel from '@/components/InsightsPanel'
 import SquadBoards from '@/components/room/SquadBoards'
 import MiniAuctionBar from '@/components/room/MiniAuctionBar'
 import PauseBanner from '@/components/room/PauseBanner'
+import HostManager from '@/components/room/HostManager'
 import CloseAuctionDialog from '@/components/room/CloseAuctionDialog'
 import { useHeartbeat } from '@/hooks/useHeartbeat'
 import { useCallSound } from '@/hooks/useCallSound'
@@ -72,6 +73,7 @@ export default function RoomPage() {
   const [minSquadSize, setMinSquadSize] = useState(DEFAULT_MIN_SQUAD)
   const [maxSquadSize, setMaxSquadSize] = useState(DEFAULT_MAX_SQUAD)
   const [autoHammer, setAutoHammer] = useState(false)
+  const [ownerUserId, setOwnerUserId] = useState<string | null>(null)
   const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [connection, setConnection] = useState<ConnectionState>('live')
   const connectionRef = useRef<ConnectionState>('live')
@@ -156,6 +158,7 @@ export default function RoomPage() {
       }
 
       setAutoHammer(Boolean((room as { auto_hammer?: boolean }).auto_hammer))
+      setOwnerUserId(room.admin_user_id != null ? String(room.admin_user_id) : null)
       const roomSquad = room as { min_squad_size?: number; max_squad_size?: number }
       const loadedMin = Number(roomSquad.min_squad_size)
       const loadedMax = Number(roomSquad.max_squad_size)
@@ -258,7 +261,11 @@ export default function RoomPage() {
       setAllUsers(data)
       const selfId = myRoomUserIdRef.current
       const me = selfId ? (data as RoomUser[]).find((u) => u.id === selfId) : undefined
-      if (me) setCurrentUser(mergeRoomUserRow(me))
+      if (me) {
+        setCurrentUser(mergeRoomUserRow(me))
+        // Follow host changes live: promoted users gain controls, demoted ones lose them.
+        setCanUseHostControls(Boolean(me.is_admin))
+      }
     }
   }
 
@@ -565,10 +572,11 @@ export default function RoomPage() {
     if (!targetRoomId) return
     const { data } = await supabase
       .from('rooms')
-      .select('min_squad_size, max_squad_size')
+      .select('min_squad_size, max_squad_size, admin_user_id')
       .eq('id', targetRoomId)
       .maybeSingle()
     if (!data) return
+    setOwnerUserId(data.admin_user_id != null ? String(data.admin_user_id) : null)
     const loadedMin = Number(data.min_squad_size)
     const loadedMax = Number(data.max_squad_size)
     if (Number.isFinite(loadedMin) && loadedMin > 0) setMinSquadSize(loadedMin)
@@ -616,6 +624,39 @@ export default function RoomPage() {
       return
     }
     await fetchAuctionState(roomId)
+  }
+
+  async function hostSetCohost(user: RoomUser, on: boolean) {
+    if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
+    const { error } = await supabase.rpc('admin_set_cohost', {
+      p_room_id: roomId,
+      p_room_user_id: user.id,
+      p_on: on,
+    })
+    if (error) {
+      alert(error.message)
+      return
+    }
+    await fetchRoomUsers(roomId)
+  }
+
+  async function hostTransfer(user: RoomUser) {
+    if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
+    if (
+      !window.confirm(
+        `Make ${user.display_name} the host? You stay a co-host, so you keep your controls and can hand it back.`
+      )
+    )
+      return
+    const { error } = await supabase.rpc('admin_transfer_host', {
+      p_room_id: roomId,
+      p_room_user_id: user.id,
+    })
+    if (error) {
+      alert(error.message)
+      return
+    }
+    await Promise.all([fetchRoomUsers(roomId), fetchSquadSizes(roomId)])
   }
 
   async function hostClose(message: string) {
@@ -1172,6 +1213,12 @@ export default function RoomPage() {
                   The purse stays locked until a team reaches the minimum. Players above that, up to the maximum, do not reserve money. Squad size can be changed before the auction starts.
                   {squadSizeMessage ? ` ${squadSizeMessage}` : ''}
                 </p>
+                <HostManager
+                  users={allUsers}
+                  ownerUserId={ownerUserId}
+                  onToggleCohost={(u, on) => void hostSetCohost(u, on)}
+                  onTransfer={(u) => void hostTransfer(u)}
+                />
               </div>
             )}
           </div>

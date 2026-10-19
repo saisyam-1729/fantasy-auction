@@ -2,6 +2,8 @@
 
 export interface RoomUser {
   id: string
+  /** Auth user id of the member (not the room_users id). */
+  user_id?: string
   username: string
   display_name: string
   budget: number
