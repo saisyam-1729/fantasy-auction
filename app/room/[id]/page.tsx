@@ -17,6 +17,8 @@ import MiniAuctionBar from '@/components/room/MiniAuctionBar'
 import PauseBanner from '@/components/room/PauseBanner'
 import CloseAuctionDialog from '@/components/room/CloseAuctionDialog'
 import { useHeartbeat } from '@/hooks/useHeartbeat'
+import { useCallSound } from '@/hooks/useCallSound'
+import { goingCall, goingCallLabel } from '@/lib/goingCall'
 import ResultsPanel from '@/components/room/ResultsPanel'
 import PlayerAvatar from '@/components/room/PlayerAvatar'
 import ConnectionBanner, { type ConnectionState } from '@/components/room/ConnectionBanner'
@@ -1013,6 +1015,15 @@ export default function RoomPage() {
     },
   })
 
+  /** The auctioneer's call as the timer runs out, with an optional sound. */
+  const call = goingCall(
+    countdown,
+    BID_TIMEOUT_SECONDS,
+    Boolean(auctionState?.top_bidder_id) && !auctionState?.is_paused
+  )
+  const callLabel = goingCallLabel(call)
+  const sound = useCallSound(call)
+
   const showHostTools = Boolean(currentUser?.is_admin || canUseHostControls)
 
   const myPurse = useMemo(() => {
@@ -1435,11 +1446,21 @@ export default function RoomPage() {
                               : 'bg-slate-700/60 border-slate-500 text-slate-300'
                         }`}>
                           <span>{countdown === 0 ? '🔨 SOLD?' : `⏱ ${countdown}s`}</span>
+                          {callLabel && countdown !== 0 && <span className="font-bold">· {callLabel}</span>}
                         </div>
                       )}
                       {auctionState.is_paused && (
                         <span className="text-amber-300/70 text-xs">Bidding is frozen</span>
                       )}
+                      <button
+                        type="button"
+                        onClick={sound.toggle}
+                        aria-pressed={sound.enabled}
+                        title={sound.enabled ? 'Turn call sounds off' : 'Turn call sounds on'}
+                        className="rounded-full border border-slate-500 bg-slate-800/70 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700"
+                      >
+                        {sound.enabled ? '🔔 Sound on' : '🔕 Sound off'}
+                      </button>
                     </div>
                     {showHostTools && (
                       <div className="flex flex-wrap gap-2 justify-end">
@@ -1731,6 +1752,7 @@ export default function RoomPage() {
           holderName={getTopBidderName()}
           iHoldBid={auctionState.top_bidder_id === currentUser?.id}
           countdown={countdown}
+          callLabel={callLabel}
           paused={auctionState.is_paused}
           button={bidBtn}
           money={formatMoney}

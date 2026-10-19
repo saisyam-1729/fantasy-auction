@@ -16,6 +16,7 @@ export default function MiniAuctionBar({
   holderName,
   iHoldBid,
   countdown,
+  callLabel,
   paused,
   button,
   money,
@@ -31,6 +32,7 @@ export default function MiniAuctionBar({
   holderName: string
   iHoldBid: boolean
   countdown: number | null
+  callLabel?: string
   paused: boolean
   button: BidButtonState
   money: (n: number) => string
@@ -61,6 +63,9 @@ export default function MiniAuctionBar({
                 <span className={urgent ? 'font-bold text-red-300' : 'text-slate-400'}>
                   {paused ? '' : `${countdown}s`}
                 </span>
+              )}
+              {callLabel && !paused && (
+                <span className="font-bold normal-case text-amber-300">{callLabel}</span>
               )}
             </span>
             <span className="block truncate text-sm font-bold text-white">
