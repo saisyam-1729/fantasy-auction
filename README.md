@@ -35,6 +35,7 @@ Money is in rupees (1 L = 100,000, 1 Cr = 10,000,000). Rules live in `lib/` and 
 - **Other tabs**: a slim live bar (lot, bid, holder, timer, Bid button) stays on screen while browsing squads or insights.
 - **Player photos**: freely licensed Wikipedia/Wikimedia Commons photos are stored in `public/players` (87 of 250 players); everyone else shows initials on their franchise colour. `node scripts/fetch-player-images.cjs` reports coverage, `--download` fetches matches, `--apply` updates `player_inventory.image_url`; approve near-matches in `data/player-images.overrides.json`. Licences and photographers are listed at `/credits`.
 - **Error logging**: uncaught browser errors and page crashes are sent to `/api/log-error` and written to the server log as `[client-error] {...}`. On Vercel, open the project, then Logs, and search for `client-error`. Nothing is stored; reports are size-capped, query strings are dropped, and callers are rate limited. A friendly error screen replaces a blank crash.
+- **Cleaning up rooms**: every room copies the 250-player list, so old rooms add up. The owner can press **Delete room** in the host panel. `npm run db:cleanup` lists rooms idle for 30+ days (`-- --days 14` to change), and only deletes them with `-- --apply`. It is a dry run by default.
 - **Insights tab**: five fixed charts (purse vs slots, roles, spend concentration, premium, timeline) and a rule-based strategy label, computed in `lib/insights.ts`.
 
 ## Code map

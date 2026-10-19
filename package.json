@@ -11,7 +11,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:apply": "node scripts/db-apply.cjs",
-    "db:test": "node scripts/db-test.cjs"
+    "db:test": "node scripts/db-test.cjs",
+    "db:cleanup": "node scripts/cleanup-rooms.cjs"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

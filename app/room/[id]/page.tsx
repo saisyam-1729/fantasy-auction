@@ -74,6 +74,7 @@ export default function RoomPage() {
   const [maxSquadSize, setMaxSquadSize] = useState(DEFAULT_MAX_SQUAD)
   const [autoHammer, setAutoHammer] = useState(false)
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null)
+  const leavingRef = useRef(false)
   const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [connection, setConnection] = useState<ConnectionState>('live')
   const connectionRef = useRef<ConnectionState>('live')
@@ -570,12 +571,20 @@ export default function RoomPage() {
   async function fetchSquadSizes(id?: string) {
     const targetRoomId = id || roomId
     if (!targetRoomId) return
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('rooms')
       .select('min_squad_size, max_squad_size, admin_user_id')
       .eq('id', targetRoomId)
       .maybeSingle()
-    if (!data) return
+    if (!data) {
+      // Query worked but the room is no longer visible: it was deleted.
+      if (!error && !leavingRef.current) {
+        leavingRef.current = true
+        alert('This room was deleted by the host.')
+        router.push('/dashboard')
+      }
+      return
+    }
     setOwnerUserId(data.admin_user_id != null ? String(data.admin_user_id) : null)
     const loadedMin = Number(data.min_squad_size)
     const loadedMax = Number(data.max_squad_size)
@@ -657,6 +666,27 @@ export default function RoomPage() {
       return
     }
     await Promise.all([fetchRoomUsers(roomId), fetchSquadSizes(roomId)])
+  }
+
+  async function hostDeleteRoom() {
+    if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
+    if (
+      !window.confirm(
+        'Delete this room for everyone? Players, squads, bids and results are removed and this cannot be undone.'
+      )
+    )
+      return
+    const { data, error } = await supabase.from('rooms').delete().eq('id', roomId).select('id')
+    if (error) {
+      alert('Could not delete the room: ' + error.message)
+      return
+    }
+    if (!data || data.length === 0) {
+      alert('Only the room owner can delete the room.')
+      return
+    }
+    leavingRef.current = true
+    router.push('/dashboard')
   }
 
   async function hostClose(message: string) {
@@ -1207,6 +1237,13 @@ export default function RoomPage() {
                     className="px-4 py-2 bg-amber-950/60 text-amber-100 border border-amber-500/70 rounded-xl hover:bg-amber-900/80 transition text-sm font-semibold"
                   >
                     Reset auction
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void hostDeleteRoom()}
+                    className="px-4 py-2 bg-red-950/60 text-red-200 border border-red-500/60 rounded-xl hover:bg-red-900/70 transition text-sm font-semibold"
+                  >
+                    Delete room
                   </button>
                 </div>
                 <p className="text-xs text-slate-400 max-w-3xl whitespace-pre-wrap">
