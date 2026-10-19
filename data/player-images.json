@@ -1,0 +1,785 @@
+[
+  {
+    "name": "Abdul Samad",
+    "team": "LSG",
+    "file": "/players/abdul-samad.png",
+    "wikipedia": "Abdul Samad (Indian cricketer)",
+    "licence": "CC BY 3.0",
+    "artist": "SunrisersIPL",
+    "source": "https://commons.wikimedia.org/wiki/File:Abdul_Samad.png"
+  },
+  {
+    "name": "Aiden Markram",
+    "team": "LSG",
+    "file": "/players/aiden-markram.png",
+    "wikipedia": "Aiden Markram",
+    "licence": "CC BY 3.0",
+    "artist": "Michael Sherman",
+    "source": "https://commons.wikimedia.org/wiki/File:Aiden_Markram_interview_after_WTC_final_2025_(cropped).png"
+  },
+  {
+    "name": "Ajinkya Rahane",
+    "team": "KKR",
+    "file": "/players/ajinkya-rahane.jpg",
+    "wikipedia": "Ajinkya Rahane",
+    "licence": "CC BY 3.0",
+    "artist": "Bollywood Hungama",
+    "source": "https://commons.wikimedia.org/wiki/File:Ajinkya_Rahane_2016_(cropped).jpg"
+  },
+  {
+    "name": "Arjun Tendulkar",
+    "team": "LSG",
+    "file": "/players/arjun-tendulkar.jpg",
+    "wikipedia": "Arjun Tendulkar",
+    "licence": "CC BY 3.0",
+    "artist": "Bollywood Hungama",
+    "source": "https://commons.wikimedia.org/wiki/File:Sachin_Tendulkar_family_(cropped).jpg"
+  },
+  {
+    "name": "Arshdeep Singh",
+    "team": "PBKS",
+    "file": "/players/arshdeep-singh.jpg",
+    "wikipedia": "Arshdeep Singh",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Prime_Minister_Of_Bharat_Shri_Narendra_Damodardas_Modi_with_Arshdeep_Singh_Family_(Cropped).jpg"
+  },
+  {
+    "name": "Auqib Nabi",
+    "team": "DC",
+    "file": "/players/auqib-nabi.jpg",
+    "wikipedia": "Auqib Nabi",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Tungtap",
+    "source": "https://commons.wikimedia.org/wiki/File:Auqib_Nabi_bowling_in_a_Ranji_Trophy_2024-25_match_against_Meghalaya_in_Shillong.jpg"
+  },
+  {
+    "name": "Axar Patel",
+    "team": "DC",
+    "file": "/players/axar-patel.jpg",
+    "wikipedia": "Axar Patel",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Axar_Patel_in_PMO_New_Delhi.jpg"
+  },
+  {
+    "name": "Ben Duckett",
+    "team": "DC",
+    "file": "/players/ben-duckett.jpg",
+    "wikipedia": "Ben Duckett",
+    "licence": "Public domain",
+    "artist": "Dave Morton",
+    "source": "https://commons.wikimedia.org/wiki/File:3_31_Another_four_(Ben_Duckett_cropped).jpg"
+  },
+  {
+    "name": "Bhuvneshwar Kumar",
+    "team": "RCB",
+    "file": "/players/bhuvneshwar-kumar.jpg",
+    "wikipedia": "Bhuvneshwar Kumar",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Akshayparmar.gu",
+    "source": "https://commons.wikimedia.org/wiki/File:Bhuvneshwar_kumar_With_Rashid_Zirak_(Bhuvneshwar_Kumar_cropped).jpg"
+  },
+  {
+    "name": "Brydon Carse",
+    "team": "SRH",
+    "file": "/players/brydon-carse.jpg",
+    "wikipedia": "Brydon Carse",
+    "licence": "Public domain",
+    "artist": "Dave Morton",
+    "source": "https://commons.wikimedia.org/wiki/File:1_24_Brydon_Carse.jpg"
+  },
+  {
+    "name": "Cameron Green",
+    "team": "KKR",
+    "file": "/players/cameron-green.jpg",
+    "wikipedia": "Cameron Green",
+    "licence": "CC BY-SA 4.0",
+    "artist": "WikiWanderer261",
+    "source": "https://commons.wikimedia.org/wiki/File:Cameron_Green_fielding_Boxing_Day_2022_(cropped).jpg"
+  },
+  {
+    "name": "David Miller",
+    "team": "DC",
+    "file": "/players/david-miller.png",
+    "wikipedia": "David Miller (South African cricketer)",
+    "licence": "CC BY 4.0",
+    "artist": "Michael Sherman",
+    "source": "https://commons.wikimedia.org/wiki/File:David_Miller_2025_interview_(cropped).png"
+  },
+  {
+    "name": "Deepak Chahar",
+    "team": "MI",
+    "file": "/players/deepak-chahar.jpg",
+    "wikipedia": "Deepak Chahar",
+    "licence": "CC BY 3.0",
+    "artist": "G. D. GOENKA SCHOOL, AGRA",
+    "source": "https://commons.wikimedia.org/wiki/File:Deepak_Chahar.jpg"
+  },
+  {
+    "name": "Hardik Pandya",
+    "team": "MI",
+    "file": "/players/hardik-pandya.jpg",
+    "wikipedia": "Hardik Pandya",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Hardik_Pandya_in_PMO_New_Delhi.jpg"
+  },
+  {
+    "name": "Ishan Kishan",
+    "team": "SRH",
+    "file": "/players/ishan-kishan.jpg",
+    "wikipedia": "Ishan Kishan",
+    "licence": "CC BY 3.0",
+    "artist": "Tata Ipl 2022",
+    "source": "https://commons.wikimedia.org/wiki/File:Ishan_Kishan.jpg"
+  },
+  {
+    "name": "Ishant Sharma",
+    "team": "GT",
+    "file": "/players/ishant-sharma.jpg",
+    "wikipedia": "Ishant Sharma",
+    "licence": "CC BY-SA 3.0",
+    "artist": "Dee03",
+    "source": "https://commons.wikimedia.org/wiki/File:Ishant_Sharma_4.jpg"
+  },
+  {
+    "name": "Jack Edwards",
+    "team": "SRH",
+    "file": "/players/jack-edwards.jpg",
+    "wikipedia": "Jack Edwards (cricketer, born 2000)",
+    "licence": "CC BY-SA 4.0",
+    "artist": "DustyNail",
+    "source": "https://commons.wikimedia.org/wiki/File:Jack_Edwards_01_20251017.jpg"
+  },
+  {
+    "name": "Jacob Duffy",
+    "team": "RCB",
+    "file": "/players/jacob-duffy.jpg",
+    "wikipedia": "Jacob Duffy",
+    "licence": "Public domain",
+    "artist": "Dave Morton",
+    "source": "https://commons.wikimedia.org/wiki/File:1_01_Jacob_Duffy.jpg"
+  },
+  {
+    "name": "Jamie Overton",
+    "team": "CSK",
+    "file": "/players/jamie-overton.jpg",
+    "wikipedia": "Jamie Overton",
+    "licence": "CC BY-SA 3.0",
+    "artist": "Harrias",
+    "source": "https://commons.wikimedia.org/wiki/File:Jamie_Overton.jpg"
+  },
+  {
+    "name": "Jason Holder",
+    "team": "GT",
+    "file": "/players/jason-holder.jpg",
+    "wikipedia": "Jason Holder",
+    "licence": "CC BY 3.0",
+    "artist": "CRICKETNEXT",
+    "source": "https://commons.wikimedia.org/wiki/File:Jason_Holder.jpg"
+  },
+  {
+    "name": "Jasprit Bumrah",
+    "team": "MI",
+    "file": "/players/jasprit-bumrah.jpg",
+    "wikipedia": "Jasprit Bumrah",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Jasprit_Bumrah_in_PMO_New_Delhi.jpg"
+  },
+  {
+    "name": "Jaydev Unadkat",
+    "team": "SRH",
+    "file": "/players/jaydev-unadkat.jpg",
+    "wikipedia": "Jaydev Unadkat",
+    "licence": "Public domain",
+    "artist": "Dave Morton",
+    "source": "https://commons.wikimedia.org/wiki/File:2_09_Jaydev_Unadkat_1.jpg"
+  },
+  {
+    "name": "Jofra Archer",
+    "team": "RR",
+    "file": "/players/jofra-archer.jpg",
+    "wikipedia": "Jofra Archer",
+    "licence": "CC BY 3.0",
+    "artist": "BBC News اردو",
+    "source": "https://commons.wikimedia.org/wiki/File:Jofra_Archer_(3).jpg"
+  },
+  {
+    "name": "Jos Buttler",
+    "team": "GT",
+    "file": "/players/jos-buttler.jpg",
+    "wikipedia": "Jos Buttler",
+    "licence": "CC BY 2.0",
+    "artist": "Number 10",
+    "source": "https://commons.wikimedia.org/wiki/File:Jos_Buttler_in_2023.jpg"
+  },
+  {
+    "name": "Josh Hazlewood",
+    "team": "RCB",
+    "file": "/players/josh-hazlewood.jpg",
+    "wikipedia": "Josh Hazlewood",
+    "licence": "CC BY 2.0",
+    "artist": "www.davidmolloyphotography.com from Sydney, Australia",
+    "source": "https://commons.wikimedia.org/wiki/File:2018_Josh_Hazlewood_(cropped).jpg"
+  },
+  {
+    "name": "Josh Inglis",
+    "team": "LSG",
+    "file": "/players/josh-inglis.png",
+    "wikipedia": "Josh Inglis",
+    "licence": "CC BY 3.0",
+    "artist": "Prime Video AU &amp; NZ",
+    "source": "https://commons.wikimedia.org/wiki/File:Josh_Inglis_The_Test_clip.png"
+  },
+  {
+    "name": "K L Rahul",
+    "team": "DC",
+    "file": "/players/k-l-rahul.jpg",
+    "wikipedia": "KL Rahul",
+    "licence": "CC BY 3.0",
+    "artist": "Bollywood Hungama",
+    "source": "https://commons.wikimedia.org/wiki/File:KL_Rahul_at_Femina_Miss_India_2018_Grand_Finale_(cropped).jpg"
+  },
+  {
+    "name": "Kagiso Rabada",
+    "team": "GT",
+    "file": "/players/kagiso-rabada.jpg",
+    "wikipedia": "Kagiso Rabada",
+    "licence": "CC BY-SA 4.0",
+    "artist": "KingdomKome",
+    "source": "https://commons.wikimedia.org/wiki/File:Kingdom_Kome_co-founders_Kagiso_Rabada_and_Cameron_Scott_at_the_first_private_screening_of_The_Ring_of_Beasts_(cropped).jpg"
+  },
+  {
+    "name": "Karun Nair",
+    "team": "DC",
+    "file": "/players/karun-nair.jpg",
+    "wikipedia": "Karun Nair",
+    "licence": "CC BY-SA 4.0",
+    "artist": "User:Vishu@2008",
+    "source": "https://commons.wikimedia.org/wiki/File:Karun_nair_With_Rashid_Zirak.jpg"
+  },
+  {
+    "name": "Khaleel Ahmed",
+    "team": "CSK",
+    "file": "/players/khaleel-ahmed.jpg",
+    "wikipedia": "Khaleel Ahmed",
+    "licence": "Public domain",
+    "artist": "Dave Morton",
+    "source": "https://commons.wikimedia.org/wiki/File:2_29_Khaleel_mugshot.jpg"
+  },
+  {
+    "name": "Krunal Pandya",
+    "team": "RCB",
+    "file": "/players/krunal-pandya.jpg",
+    "wikipedia": "Krunal Pandya",
+    "licence": "CC BY 3.0",
+    "artist": "Bollywood Hungama",
+    "source": "https://commons.wikimedia.org/wiki/File:Krunal_Pandya_and_Hardik_Pandya_(cropped)_(cropped).jpg"
+  },
+  {
+    "name": "Kuldeep Yadav",
+    "team": "DC",
+    "file": "/players/kuldeep-yadav.jpg",
+    "wikipedia": "Kuldeep Yadav",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Kuldeep_Yadav_in_PMO_New_Delhi.jpg"
+  },
+  {
+    "name": "Kyle Jamieson",
+    "team": "DC",
+    "file": "/players/kyle-jamieson.jpg",
+    "wikipedia": "Kyle Jamieson",
+    "licence": "CC BY 3.0 nz",
+    "artist": "Photographer - David Hollander",
+    "source": "https://commons.wikimedia.org/wiki/File:Kyle_Jamieson_2015_(cropped).jpg"
+  },
+  {
+    "name": "Lockie Ferguson",
+    "team": "PBKS",
+    "file": "/players/lockie-ferguson.jpg",
+    "wikipedia": "Lockie Ferguson",
+    "licence": "CC BY 3.0",
+    "artist": "CRICKETNEXT",
+    "source": "https://commons.wikimedia.org/wiki/File:Lockie_Ferguson.jpg"
+  },
+  {
+    "name": "Luke Wood",
+    "team": "GT",
+    "file": "/players/luke-wood.jpg",
+    "wikipedia": "Luke Wood (cricketer)",
+    "licence": "Public domain",
+    "artist": "Dave Morton",
+    "source": "https://commons.wikimedia.org/wiki/File:2_16_Luke_Wood_sequence_(cropped).jpg"
+  },
+  {
+    "name": "Lungisani Ngidi",
+    "team": "DC",
+    "file": "/players/lungisani-ngidi.jpg",
+    "wikipedia": "Lungi Ngidi",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Storm machine",
+    "source": "https://commons.wikimedia.org/wiki/File:Lungi_Ngidi_2022.jpg"
+  },
+  {
+    "name": "Manish Pandey",
+    "team": "KKR",
+    "file": "/players/manish-pandey.jpg",
+    "wikipedia": "Manish Pandey",
+    "licence": "CC BY 3.0",
+    "artist": "Kolkata Knight Riders - Official",
+    "source": "https://commons.wikimedia.org/wiki/File:Manish_Pandey_(3).jpg"
+  },
+  {
+    "name": "Marco Jansen",
+    "team": "PBKS",
+    "file": "/players/marco-jansen.jpg",
+    "wikipedia": "Marco Jansen",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Storm machine",
+    "source": "https://commons.wikimedia.org/wiki/File:Marco_Jansen_2022.jpg"
+  },
+  {
+    "name": "Marcus Stoinis",
+    "team": "PBKS",
+    "file": "/players/marcus-stoinis.jpg",
+    "wikipedia": "Marcus Stoinis",
+    "licence": "CC BY 2.0",
+    "artist": "www.davidmolloyphotography.com from Sydney, Australia",
+    "source": "https://commons.wikimedia.org/wiki/File:2018.01.21.15.22.25-Stoinis_(39081521620).jpg"
+  },
+  {
+    "name": "Matt Henry",
+    "team": "CSK",
+    "file": "/players/matt-henry.jpg",
+    "wikipedia": "Matt Henry (cricketer)",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Blue Square Thing",
+    "source": "https://commons.wikimedia.org/wiki/File:Matt_Henry_2018.jpg"
+  },
+  {
+    "name": "Mitchell Starc",
+    "team": "DC",
+    "file": "/players/mitchell-starc.jpg",
+    "wikipedia": "Mitchell Starc",
+    "licence": "CC BY 3.0",
+    "artist": "Prime Video AU &amp; NZ",
+    "source": "https://commons.wikimedia.org/wiki/File:Mitchell_Starc_2023.jpg"
+  },
+  {
+    "name": "Mohammad Shami",
+    "team": "LSG",
+    "file": "/players/mohammad-shami.jpg",
+    "wikipedia": "Mohammed Shami",
+    "licence": "GODL-India",
+    "artist": "President's Secretariat",
+    "source": "https://commons.wikimedia.org/wiki/File:Mohammed_Shami_Arjuna_Award_(cropped).jpg"
+  },
+  {
+    "name": "Mohammed Siraj",
+    "team": "GT",
+    "file": "/players/mohammed-siraj.jpg",
+    "wikipedia": "Mohammed Siraj",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Prime_Minister_Of_Bharat_Shri_Narendra_Damodardas_Modi_with_Mohammad_Siraj_(cropped).jpg"
+  },
+  {
+    "name": "MS Dhoni",
+    "team": "CSK",
+    "file": "/players/ms-dhoni.jpg",
+    "wikipedia": "MS Dhoni",
+    "licence": "CC BY 3.0",
+    "artist": "RIGI",
+    "source": "https://commons.wikimedia.org/wiki/File:MS_Dhoni_(Prabhav_%2723_-_RiGI_2023).jpg"
+  },
+  {
+    "name": "Nitish Kumar Reddy",
+    "team": "SRH",
+    "file": "/players/nitish-kumar-reddy.jpg",
+    "wikipedia": "Nitish Kumar Reddy",
+    "licence": "CC0",
+    "artist": "WikiWanderer261",
+    "source": "https://commons.wikimedia.org/wiki/File:Nitish_Kumar_Reddy_BGT_2024_(cropped)_2.jpg"
+  },
+  {
+    "name": "Pat Cummins",
+    "team": "SRH",
+    "file": "/players/pat-cummins.jpg",
+    "wikipedia": "Pat Cummins",
+    "licence": "CC BY-SA 4.0",
+    "artist": "SirWellsy99",
+    "source": "https://commons.wikimedia.org/wiki/File:Pat_Cummins_fielding_Ashes_2021_(cropped).jpg"
+  },
+  {
+    "name": "Phil Salt",
+    "team": "RCB",
+    "file": "/players/phil-salt.jpg",
+    "wikipedia": "Phil Salt",
+    "licence": "Public domain",
+    "artist": "Dave Morton",
+    "source": "https://commons.wikimedia.org/wiki/File:2_02_Phil_Salt.jpg"
+  },
+  {
+    "name": "Prithvi Shaw",
+    "team": "DC",
+    "file": "/players/prithvi-shaw.png",
+    "wikipedia": "Prithvi Shaw",
+    "licence": "CC BY 3.0",
+    "artist": "CRICKETNEXT",
+    "source": "https://commons.wikimedia.org/wiki/File:Prithvi_shaw.png"
+  },
+  {
+    "name": "Quinton de Kock",
+    "team": "MI",
+    "file": "/players/quinton-de-kock.jpg",
+    "wikipedia": "Quinton de Kock",
+    "licence": "CC BY-SA 2.0",
+    "artist": "NAPARAZZI",
+    "source": "https://commons.wikimedia.org/wiki/File:QUINTON_DE_KOCK_(15681398316).jpg"
+  },
+  {
+    "name": "Rachin Ravindra",
+    "team": "KKR",
+    "file": "/players/rachin-ravindra.jpg",
+    "wikipedia": "Rachin Ravindra",
+    "licence": "CC BY-SA 4.0",
+    "artist": "JaumeBG",
+    "source": "https://commons.wikimedia.org/wiki/File:Rachin_Ravindra.jpg"
+  },
+  {
+    "name": "Raghu Sharma",
+    "team": "MI",
+    "file": "/players/raghu-sharma.jpg",
+    "wikipedia": "Raghu Sharma (cricketer)",
+    "licence": "CC BY 4.0",
+    "artist": "Raghu Sharma",
+    "source": "https://commons.wikimedia.org/wiki/File:Raghu_Sharma_with_his_parents.jpg"
+  },
+  {
+    "name": "Rashid Khan",
+    "team": "GT",
+    "file": "/players/rashid-khan.jpg",
+    "wikipedia": "Rashid Khan",
+    "licence": "CC BY 3.0",
+    "artist": "Afghanistan Cricket Board",
+    "source": "https://commons.wikimedia.org/wiki/File:Rashid_Khan.jpg"
+  },
+  {
+    "name": "Rasikh Dar Salam",
+    "team": "RCB",
+    "file": "/players/rasikh-dar-salam.jpg",
+    "wikipedia": "Rasikh Salam",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Wani Moomin",
+    "source": "https://commons.wikimedia.org/wiki/File:IG_20231222_080959.jpg"
+  },
+  {
+    "name": "Ravindra Jadeja",
+    "team": "RR",
+    "file": "/players/ravindra-jadeja.jpg",
+    "wikipedia": "Ravindra Jadeja",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:PM_Shri_Narendra_Modi_with_Ravindra_Jadeja_(Cropped).jpg"
+  },
+  {
+    "name": "Ravisrinivasan Sai Kishore",
+    "team": "GT",
+    "file": "/players/ravisrinivasan-sai-kishore.jpg",
+    "wikipedia": "Sai Kishore",
+    "licence": "Public domain",
+    "artist": "Dave Morton",
+    "source": "https://commons.wikimedia.org/wiki/File:4_15_Sai_Kishore.jpg"
+  },
+  {
+    "name": "Rishabh Pant",
+    "team": "LSG",
+    "file": "/players/rishabh-pant.jpg",
+    "wikipedia": "Rishabh Pant",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Rishabh_Pant.jpg"
+  },
+  {
+    "name": "Rohit Sharma",
+    "team": "MI",
+    "file": "/players/rohit-sharma.jpg",
+    "wikipedia": "Rohit Sharma",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Prime_Minister_Of_Bharat_Shri_Narendra_Damodardas_Modi_with_Shri_Rohit_Gurunath_Sharma_(Cropped).jpg"
+  },
+  {
+    "name": "Ruturaj Gaikwad",
+    "team": "CSK",
+    "file": "/players/ruturaj-gaikwad.jpg",
+    "wikipedia": "Ruturaj Gaikwad",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Ruturaj_Gaikwad.jpeg"
+  },
+  {
+    "name": "Ryan Rickelton",
+    "team": "MI",
+    "file": "/players/ryan-rickelton.jpg",
+    "wikipedia": "Ryan Rickelton",
+    "licence": "Public domain",
+    "artist": "Dave Morton",
+    "source": "https://commons.wikimedia.org/wiki/File:2_40_Ryan_Rickleton.jpg"
+  },
+  {
+    "name": "Sam Curran",
+    "team": "RR",
+    "file": "/players/sam-curran.jpg",
+    "wikipedia": "Sam Curran",
+    "licence": "CC BY 2.0",
+    "artist": "Number 10",
+    "source": "https://commons.wikimedia.org/wiki/File:The_Prime_Minister_welcomes_the_World_Cup_winning_cricketers_(52764650104)_-_Sam_Curran_(cropped).jpg"
+  },
+  {
+    "name": "Sameer Rizvi",
+    "team": "DC",
+    "file": "/players/sameer-rizvi.jpg",
+    "wikipedia": "Sameer Rizvi",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Akshayparmar.gu",
+    "source": "https://commons.wikimedia.org/wiki/File:Sameer_rizvi_With_Rashid_Zirak.jpg"
+  },
+  {
+    "name": "Sanju Samson",
+    "team": "CSK",
+    "file": "/players/sanju-samson.jpg",
+    "wikipedia": "Sanju Samson",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Sanju_Samson_in_PMO_New_Delhi.jpg"
+  },
+  {
+    "name": "Shahbaz Ahamad",
+    "team": "LSG",
+    "file": "/players/shahbaz-ahamad.jpg",
+    "wikipedia": "Shahbaz Ahmed",
+    "licence": "CC BY 2.0",
+    "artist": "Doha Stadium Plus Qatar",
+    "source": "https://commons.wikimedia.org/wiki/File:Shabaz_Ahmed_Senior.jpg"
+  },
+  {
+    "name": "Shahrukh Khan",
+    "team": "GT",
+    "file": "/players/shahrukh-khan.jpg",
+    "wikipedia": "Shahrukh Khan (cricketer)",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Dee03",
+    "source": "https://commons.wikimedia.org/wiki/File:Shahrukh_Khan.jpg"
+  },
+  {
+    "name": "Shimron Hetmyer",
+    "team": "RR",
+    "file": "/players/shimron-hetmyer.jpg",
+    "wikipedia": "Shimron Hetmyer",
+    "licence": "CC BY 3.0",
+    "artist": "CRICKETNEXT",
+    "source": "https://commons.wikimedia.org/wiki/File:Shimron_Hetmyer.jpg"
+  },
+  {
+    "name": "Shivam Dube",
+    "team": "CSK",
+    "file": "/players/shivam-dube.jpg",
+    "wikipedia": "Shivam Dube",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Shivam_Dube_in_PMO_New_Delhi.jpg"
+  },
+  {
+    "name": "Shreyas Gopal",
+    "team": "CSK",
+    "file": "/players/shreyas-gopal.png",
+    "wikipedia": "Shreyas Gopal",
+    "licence": "CC BY 3.0",
+    "artist": "CRICKETNEXT",
+    "source": "https://commons.wikimedia.org/wiki/File:Rajasthan_Royals_player_Shreyas_Gopal_in_a_post-match_presentation_during_2019_Indian_Premier_League.png"
+  },
+  {
+    "name": "Shreyas Iyer",
+    "team": "PBKS",
+    "file": "/players/shreyas-iyer.jpg",
+    "wikipedia": "Shreyas Iyer",
+    "licence": "CC BY 3.0",
+    "artist": "https://www.bollywoodhungama.com",
+    "source": "https://commons.wikimedia.org/wiki/File:Shreyas_Iyer_snapped_at_the_airport_(Cropped).jpg"
+  },
+  {
+    "name": "Shubman Gill",
+    "team": "GT",
+    "file": "/players/shubman-gill.jpg",
+    "wikipedia": "Shubman Gill",
+    "licence": "CC BY 3.0",
+    "artist": "Bollywood Hungama",
+    "source": "https://commons.wikimedia.org/wiki/File:Shubman_Gill_2023_(cropped).jpg"
+  },
+  {
+    "name": "Sunil Narine",
+    "team": "KKR",
+    "file": "/players/sunil-narine.jpg",
+    "wikipedia": "Sunil Narine",
+    "licence": "CC BY 3.0",
+    "artist": "Kolkata Knight Riders - Official",
+    "source": "https://commons.wikimedia.org/wiki/File:Sunil_Narine.jpg"
+  },
+  {
+    "name": "Surya Kumar Yadav",
+    "team": "MI",
+    "file": "/players/surya-kumar-yadav.jpg",
+    "wikipedia": "Suryakumar Yadav",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Suryakumar_Yadav_in_PMO_New_Delhi.jpg"
+  },
+  {
+    "name": "Suryansh Shedge",
+    "team": "PBKS",
+    "file": "/players/suryansh-shedge.jpg",
+    "wikipedia": "Suryansh Shedge",
+    "licence": "CC BY 4.0",
+    "artist": "Unknown authorUnknown author",
+    "source": "https://commons.wikimedia.org/wiki/File:Suryansh_Shedge.jpg"
+  },
+  {
+    "name": "Suyash Sharma",
+    "team": "RCB",
+    "file": "/players/suyash-sharma.png",
+    "wikipedia": "Suyash Sharma",
+    "licence": "CC BY 3.0",
+    "artist": "Kolkata Knight Riders",
+    "source": "https://commons.wikimedia.org/wiki/File:Suyash_Sharma.png"
+  },
+  {
+    "name": "T Natarajan",
+    "team": "DC",
+    "file": "/players/t-natarajan.jpg",
+    "wikipedia": "T. Natarajan",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Dee03",
+    "source": "https://commons.wikimedia.org/wiki/File:T_Natarajan.jpg"
+  },
+  {
+    "name": "Tilak Varma",
+    "team": "MI",
+    "file": "/players/tilak-varma.png",
+    "wikipedia": "Tilak Varma",
+    "licence": "CC BY 4.0",
+    "artist": "Buchi Babu Sana",
+    "source": "https://commons.wikimedia.org/wiki/File:Tilak_Varma_in_March_2026.png"
+  },
+  {
+    "name": "Travis Head",
+    "team": "SRH",
+    "file": "/players/travis-head.jpg",
+    "wikipedia": "Travis Head",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Calistemon",
+    "source": "https://commons.wikimedia.org/wiki/File:Travis_Head_bowling_at_Perth_Stadium,_First_Test_Australia_versus_West_Indies,_2_December_2022_03_(cropped).jpg"
+  },
+  {
+    "name": "Trent Boult",
+    "team": "MI",
+    "file": "/players/trent-boult.jpg",
+    "wikipedia": "Trent Boult",
+    "licence": "CC BY 2.0",
+    "artist": "www.davidmolloyphotography.com from Sydney, Australia",
+    "source": "https://commons.wikimedia.org/wiki/File:2018.02.03.22.23.14-AUSvNZL_T20_AUS_innings,_SCG_(39533156665).jpg"
+  },
+  {
+    "name": "Tushar Deshpande",
+    "team": "RR",
+    "file": "/players/tushar-deshpande.jpg",
+    "wikipedia": "Tushar Deshpande",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Dee03",
+    "source": "https://commons.wikimedia.org/wiki/File:Tushar_Deshpande.jpg"
+  },
+  {
+    "name": "Umran Malik",
+    "team": "KKR",
+    "file": "/players/umran-malik.jpg",
+    "wikipedia": "Umran Malik",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Gorav Sharma",
+    "source": "https://commons.wikimedia.org/wiki/File:Umran_Malik_in_GGM.jpg"
+  },
+  {
+    "name": "Vaibhav Sooryavanshi",
+    "team": "RR",
+    "file": "/players/vaibhav-sooryavanshi.jpg",
+    "wikipedia": "Vaibhav Sooryavanshi",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Vaibhav_Suryavanshi_meets_PM_Modi.jpg"
+  },
+  {
+    "name": "Venkatesh Iyer",
+    "team": "RCB",
+    "file": "/players/venkatesh-iyer.png",
+    "wikipedia": "Venkatesh Iyer",
+    "licence": "CC BY 3.0",
+    "artist": "Kolkata Knight Riders",
+    "source": "https://commons.wikimedia.org/wiki/File:Venkatesh_Iyer.png"
+  },
+  {
+    "name": "Virat Kohli",
+    "team": "RCB",
+    "file": "/players/virat-kohli.jpg",
+    "wikipedia": "Virat Kohli",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Virat_Kohli_during_the_India_vs_Aus_4th_Test_match_at_Narendra_Modi_Stadium_on_09_March_2023.jpg"
+  },
+  {
+    "name": "Wanindu Hasaranga",
+    "team": "LSG",
+    "file": "/players/wanindu-hasaranga.jpg",
+    "wikipedia": "Wanindu Hasaranga",
+    "licence": "CC BY-SA 4.0",
+    "artist": "04 ATM 04",
+    "source": "https://commons.wikimedia.org/wiki/File:Waniya.jpg"
+  },
+  {
+    "name": "Washington Sundar",
+    "team": "GT",
+    "file": "/players/washington-sundar.jpg",
+    "wikipedia": "Washington Sundar",
+    "licence": "CC BY-SA 4.0",
+    "artist": "Dee03",
+    "source": "https://commons.wikimedia.org/wiki/File:Washington_Sundar.jpg"
+  },
+  {
+    "name": "Will Jacks",
+    "team": "MI",
+    "file": "/players/will-jacks.jpg",
+    "wikipedia": "Will Jacks",
+    "licence": "Public domain",
+    "artist": "Dave Morton",
+    "source": "https://commons.wikimedia.org/wiki/File:4_20_Will_Jacks.jpg"
+  },
+  {
+    "name": "Yashasvi Jaiswal",
+    "team": "RR",
+    "file": "/players/yashasvi-jaiswal.jpg",
+    "wikipedia": "Yashasvi Jaiswal",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Yashasvi_Jaiswal_in_PMO_New_Delhi.jpg"
+  },
+  {
+    "name": "Yuzvendra Chahal",
+    "team": "PBKS",
+    "file": "/players/yuzvendra-chahal.jpg",
+    "wikipedia": "Yuzvendra Chahal",
+    "licence": "GODL-India",
+    "artist": "Prime Minister's Office",
+    "source": "https://commons.wikimedia.org/wiki/File:Yuzvendra_Chahal_in_PMO_New_Delhi.jpg"
+  }
+]

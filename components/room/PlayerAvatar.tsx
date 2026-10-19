@@ -48,7 +48,7 @@ export default function PlayerAvatar({
       height={size}
       unoptimized
       onError={() => setFailedSrc(src)}
-      className={`object-cover ${className}`}
+      className={`object-cover object-[50%_20%] ${className}`}
     />
   )
 }
