@@ -1,12 +1,15 @@
 'use client'
 
 import { bidButtonLabel, type BidButtonState } from '@/lib/bidButton'
+import PlayerAvatar from './PlayerAvatar'
 
 /**
  * Slim live-auction strip shown on the other tabs while a lot is live, so a
  * player browsing squads or insights can still follow and bid.
  */
 export default function MiniAuctionBar({
+  imageUrl,
+  team,
   playerName,
   role,
   currentBid,
@@ -20,6 +23,8 @@ export default function MiniAuctionBar({
   onBid,
   onOpen,
 }: {
+  imageUrl: string | null
+  team?: string | null
   playerName: string
   role: string
   currentBid: number
@@ -41,7 +46,15 @@ export default function MiniAuctionBar({
       className="fixed inset-x-2 bottom-2 z-40 mx-auto max-w-2xl rounded-2xl border border-yellow-500/40 bg-slate-900/95 p-3 shadow-2xl shadow-black/60 backdrop-blur"
     >
       <div className="flex items-center gap-3">
-        <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          <PlayerAvatar
+            src={imageUrl}
+            name={playerName}
+            team={team}
+            size={48}
+            className="h-12 w-12 shrink-0 rounded-full border-2 border-yellow-500"
+          />
+          <span className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide">
             <span className={paused ? 'text-amber-300' : 'text-red-400'}>{paused ? '⏸ Paused' : '● Live'}</span>
             {countdown !== null && (
@@ -58,6 +71,7 @@ export default function MiniAuctionBar({
             {' · '}
             <span className={iHoldBid ? 'text-green-400' : ''}>{iHoldBid ? 'You hold it' : holderName}</span>
           </div>
+          </span>
         </button>
         <button
           type="button"

@@ -85,7 +85,7 @@ export default function PlayersTab({
               <tr key={player.id} className={tooExpensive ? 'opacity-50' : ''}>
                 <td className="p-3">
                   <div className="flex items-center gap-3">
-                    <PlayerAvatar src={player.image_url} name={player.player_name} size={32} className="w-8 h-8 rounded-full" />
+                    <PlayerAvatar src={player.image_url} name={player.player_name} team={player.team} size={32} className="w-8 h-8 rounded-full" />
                     <span className="text-white">{player.player_name}</span>
                   </div>
                 </td>

@@ -84,7 +84,7 @@ export default function MySquadTab({
             {mySquad.map(player => (
               <div key={player.id} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
                 <div className="flex items-center gap-3">
-                  <PlayerAvatar src={player.image_url} name={player.player_name} size={48} className="w-12 h-12 rounded-full" />
+                  <PlayerAvatar src={player.image_url} name={player.player_name} team={player.team} size={48} className="w-12 h-12 rounded-full" />
                   <div className="flex-1">
                     <div className="font-bold text-white">{player.player_name}</div>
                     <div className="text-xs text-slate-400">

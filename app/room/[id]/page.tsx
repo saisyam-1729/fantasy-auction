@@ -1502,11 +1502,12 @@ export default function RoomPage() {
                   </div>
 
                   <div className="flex justify-center mb-6">
-                    <div className="w-28 h-28 sm:w-40 sm:h-40 rounded-full border-4 border-yellow-500 overflow-hidden bg-slate-800">
+                    <div className="w-36 h-36 sm:w-52 sm:h-52 rounded-full border-4 border-yellow-500 overflow-hidden bg-slate-800">
                       <PlayerAvatar
                         src={currentPlayer.image_url}
                         name={currentPlayer.player_name}
-                        size={160}
+                        team={currentPlayer.team}
+                        size={224}
                         className="w-full h-full"
                       />
                     </div>
@@ -1591,6 +1592,7 @@ export default function RoomPage() {
                             <PlayerAvatar
                               src={p.image_url}
                               name={p.player_name}
+                              team={p.team}
                               size={28}
                               className="w-7 h-7 rounded-full shrink-0"
                             />
@@ -1721,6 +1723,8 @@ export default function RoomPage() {
 
       {showMiniBar && bidBtn && currentPlayer && auctionState && (
         <MiniAuctionBar
+          imageUrl={currentPlayer.image_url}
+          team={currentPlayer.team}
           playerName={currentPlayer.player_name}
           role={currentPlayer.player_type}
           currentBid={auctionState.current_bid}
