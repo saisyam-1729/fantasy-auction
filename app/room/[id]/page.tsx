@@ -8,10 +8,12 @@ import {
   readyVotesNeededToStart,
 } from '@/lib/auctionConsensus'
 import { nextBidIncrement } from '@/lib/bidSlabs'
+import { bidButtonLabel, bidButtonState } from '@/lib/bidButton'
 import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD, purseLock } from '@/lib/purse'
 import { computeInsights, rivalsStrip } from '@/lib/insights'
 import InsightsPanel from '@/components/InsightsPanel'
 import SquadBoards from '@/components/room/SquadBoards'
+import MiniAuctionBar from '@/components/room/MiniAuctionBar'
 import ResultsPanel from '@/components/room/ResultsPanel'
 import PlayerAvatar from '@/components/room/PlayerAvatar'
 import ConnectionBanner, { type ConnectionState } from '@/components/room/ConnectionBanner'
@@ -271,7 +273,9 @@ export default function RoomPage() {
         return data
       })
       
-      if (data.current_player_id) {
+      if (data.current_player_id && data.current_player_id === loadedLotRef.current) {
+        // same lot as last time: nothing more to load
+      } else if (data.current_player_id) {
         const { data: player } = await supabase
           .from('room_players')
           .select(`
@@ -289,6 +293,7 @@ export default function RoomPage() {
           .eq('id', data.current_player_id)
           .maybeSingle()
 
+        loadedLotRef.current = player ? data.current_player_id : null
         if (!player) {
           setCurrentPlayer(null)
         } else {
@@ -311,6 +316,7 @@ export default function RoomPage() {
           }
         }
       } else {
+        loadedLotRef.current = null
         setCurrentPlayer(null)
       }
     }
@@ -797,6 +803,7 @@ export default function RoomPage() {
   }, [allUsers, auctionState?.is_active])
 
   const consensusAutoStartRef = useRef(false)
+  const loadedLotRef = useRef<string | null>(null)
   const lastLotKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -919,29 +926,38 @@ export default function RoomPage() {
     )
   }, [allPlayers, auctionState?.current_player_id, hostSort, hostTypes, hostMinBase, hostMaxBase])
 
-  /** Backup if Realtime publication is missing: still sync lobby every few seconds. */
+  /**
+   * Always-on sync, lobby and live. Realtime is the fast path; this makes sure a
+   * missed event (sleeping phone, dropped socket, tables not in the realtime
+   * publication) is corrected within seconds on every screen.
+   */
   useEffect(() => {
     if (!roomId || loading) return
-    if (auctionState?.is_active) return
-
-    const t = window.setInterval(() => {
-      void fetchRoomUsersRef.current(roomId)
-      void fetchSquadSizesRef.current(roomId)
-    }, 3000)
-
-    return () => window.clearInterval(t)
-  }, [roomId, loading, auctionState?.is_active])
-
-  /** Light polling while live (realtime can miss bids). */
-  useEffect(() => {
-    if (!roomId || loading) return
-    if (!auctionState?.is_active) return
     const id = roomId
-    const i = window.setInterval(() => {
+    const stateTimer = window.setInterval(() => {
       void fetchAuctionStateRef.current(id)
     }, 2500)
-    return () => window.clearInterval(i)
-  }, [roomId, loading, auctionState?.is_active])
+    const dataTimer = window.setInterval(() => {
+      void fetchRoomUsersRef.current(id)
+      void fetchAllPlayersRef.current(id)
+      void fetchSquadSizesRef.current(id)
+    }, 10000)
+    return () => {
+      window.clearInterval(stateTimer)
+      window.clearInterval(dataTimer)
+    }
+  }, [roomId, loading])
+
+  /**
+   * Any change of auction phase (start, reset, pause, end, new lot) refetches the
+   * people and players straight away, so every screen follows the state, not just
+   * the one that pressed the button.
+   */
+  useEffect(() => {
+    if (!roomId || loading) return
+    void fetchRoomUsersRef.current(roomId)
+    void fetchAllPlayersRef.current(roomId)
+  }, [roomId, loading, auctionState?.is_active, auctionState?.is_paused, auctionState?.current_player_id])
 
   const BID_TIMEOUT_SECONDS = 30
 
@@ -987,6 +1003,34 @@ export default function RoomPage() {
 
   const squadBoards = useMemo(() => buildSquadBoards(allUsers, allPlayers), [allUsers, allPlayers])
 
+  const bidBtn =
+    auctionState?.is_active && currentPlayer && currentUser
+      ? bidButtonState({
+          currentBid: auctionState.current_bid,
+          holdsBid: auctionState.top_bidder_id === currentUser.id,
+          paused: auctionState.is_paused,
+          offline: connection === 'offline',
+          atCap: Boolean(myPurse?.atCap),
+          remaining: myPurse?.remaining ?? 0,
+          freeToSpend: myPurse?.freeToSpend ?? 0,
+        })
+      : null
+  const showMiniBar = activeTab !== 'auction' && Boolean(bidBtn && auctionState?.is_active && currentPlayer)
+
+  // Buzz the phone when someone takes the lead from you.
+  const heldByMeRef = useRef(false)
+  useEffect(() => {
+    const holdsNow = Boolean(currentUser && auctionState?.top_bidder_id === currentUser.id)
+    if (heldByMeRef.current && !holdsNow && auctionState?.top_bidder_id) {
+      try {
+        navigator.vibrate?.(200)
+      } catch {
+        // vibration is optional
+      }
+    }
+    heldByMeRef.current = holdsNow
+  }, [auctionState?.top_bidder_id, currentUser])
+
   const insights = useMemo(
     () => computeInsights({ users: allUsers, players: allPlayers, minSquad: minSquadSize, maxSquad: maxSquadSize }),
     [allUsers, allPlayers, minSquadSize, maxSquadSize]
@@ -1002,7 +1046,7 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
+    <div className={`min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 ${showMiniBar ? 'pb-28' : ''}`}>
       <ConnectionBanner state={connection} />
       <div className="max-w-7xl mx-auto mb-6">
         <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-4">
@@ -1470,35 +1514,20 @@ export default function RoomPage() {
                     </div>
                   )}
 
-                  {(() => {
-                    const raise = nextBidIncrement(auctionState.current_bid)
-                    const nextPrice = auctionState.current_bid + raise
-                    const remaining = myPurse?.remaining ?? 0
-                    const freeToSpend = myPurse?.freeToSpend ?? 0
-                    const cantAfford = nextPrice > remaining
-                    const locksPurse = nextPrice > freeToSpend
-                    const holdBid = auctionState.top_bidder_id === currentUser?.id
-                    return (
-                      <div className="mb-4 sticky bottom-3 z-10 rounded-2xl bg-slate-900/80 backdrop-blur p-2 shadow-lg shadow-black/40 lg:static lg:bg-transparent lg:p-0 lg:shadow-none">
-                        <button
-                          onClick={() => placeBid(raise)}
-                          disabled={holdBid || auctionState.is_paused || locksPurse || connection === 'offline'}
-                          className="w-full py-4 min-h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {holdBid
-                            ? 'You hold the highest bid'
-                            : cantAfford
-                              ? `Need ${formatMoney(nextPrice)}`
-                              : locksPurse
-                                ? 'Leaves the other slots short'
-                                : `Bid ${formatMoney(nextPrice)} · +${formatMoney(raise)}`}
-                        </button>
-                        <p className="text-center text-xs text-slate-500 mt-2">
-                          Under ₹2 Cr the raise is ₹10 L. From ₹2 Cr to ₹5 Cr it is ₹20 L. Above ₹5 Cr it is ₹25 L.
-                        </p>
-                      </div>
-                    )
-                  })()}
+                  {bidBtn && (
+                    <div className="mb-4 sticky bottom-3 z-10 rounded-2xl bg-slate-900/80 backdrop-blur p-2 shadow-lg shadow-black/40 lg:static lg:bg-transparent lg:p-0 lg:shadow-none">
+                      <button
+                        onClick={() => placeBid(bidBtn.raise)}
+                        disabled={bidBtn.disabled}
+                        className="w-full py-4 min-h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {bidButtonLabel(bidBtn, formatMoney)}
+                      </button>
+                      <p className="text-center text-xs text-slate-500 mt-2">
+                        Under ₹2 Cr the raise is ₹10 L. From ₹2 Cr to ₹5 Cr it is ₹20 L. Above ₹5 Cr it is ₹25 L.
+                      </p>
+                    </div>
+                  )}
 
                   {bidMessage && (
                     <div role="status" aria-live="polite" className={`text-center text-sm font-medium ${
@@ -1647,6 +1676,23 @@ export default function RoomPage() {
           />
         )}
       </div>
+
+      {showMiniBar && bidBtn && currentPlayer && auctionState && (
+        <MiniAuctionBar
+          playerName={currentPlayer.player_name}
+          role={currentPlayer.player_type}
+          currentBid={auctionState.current_bid}
+          holderName={getTopBidderName()}
+          iHoldBid={auctionState.top_bidder_id === currentUser?.id}
+          countdown={countdown}
+          paused={auctionState.is_paused}
+          button={bidBtn}
+          money={formatMoney}
+          message={bidMessage}
+          onBid={() => placeBid(bidBtn.raise)}
+          onOpen={() => setActiveTab('auction')}
+        />
+      )}
     </div>
   )
 }
