@@ -55,22 +55,22 @@ export default function MiniAuctionBar({
             className="h-12 w-12 shrink-0 rounded-full border-2 border-yellow-500"
           />
           <span className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide">
-            <span className={paused ? 'text-amber-300' : 'text-red-400'}>{paused ? '⏸ Paused' : '● Live'}</span>
-            {countdown !== null && (
-              <span className={urgent ? 'font-bold text-red-300' : 'text-slate-400'}>
-                {paused ? '' : `${countdown}s`}
-              </span>
-            )}
-          </div>
-          <div className="truncate text-sm font-bold text-white">
-            {playerName} <span className="font-normal text-slate-400">{role}</span>
-          </div>
-          <div className="truncate text-xs text-slate-300" aria-live="polite">
-            <span className="font-semibold text-yellow-300">{money(currentBid)}</span>
-            {' · '}
-            <span className={iHoldBid ? 'text-green-400' : ''}>{iHoldBid ? 'You hold it' : holderName}</span>
-          </div>
+            <span className="flex items-center gap-2 text-[11px] uppercase tracking-wide">
+              <span className={paused ? 'text-amber-300' : 'text-red-400'}>{paused ? '⏸ Paused' : '● Live'}</span>
+              {countdown !== null && (
+                <span className={urgent ? 'font-bold text-red-300' : 'text-slate-400'}>
+                  {paused ? '' : `${countdown}s`}
+                </span>
+              )}
+            </span>
+            <span className="block truncate text-sm font-bold text-white">
+              {playerName} <span className="font-normal text-slate-400">{role}</span>
+            </span>
+            <span className="block truncate text-xs text-slate-300" aria-live="polite">
+              <span className="font-semibold text-yellow-300">{money(currentBid)}</span>
+              {' · '}
+              <span className={iHoldBid ? 'text-green-400' : ''}>{iHoldBid ? 'You hold it' : holderName}</span>
+            </span>
           </span>
         </button>
         <button
