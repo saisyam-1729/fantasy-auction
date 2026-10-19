@@ -20,6 +20,7 @@ import CloseAuctionDialog from '@/components/room/CloseAuctionDialog'
 import { useHeartbeat } from '@/hooks/useHeartbeat'
 import { useCallSound } from '@/hooks/useCallSound'
 import { goingCall, goingCallLabel } from '@/lib/goingCall'
+import { compareBySets, setInfo, setProgress } from '@/lib/sets'
 import ResultsPanel from '@/components/room/ResultsPanel'
 import PlayerAvatar from '@/components/room/PlayerAvatar'
 import ConnectionBanner, { type ConnectionState } from '@/components/room/ConnectionBanner'
@@ -74,6 +75,8 @@ export default function RoomPage() {
   const [maxSquadSize, setMaxSquadSize] = useState(DEFAULT_MAX_SQUAD)
   const [autoHammer, setAutoHammer] = useState(false)
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null)
+  /** The lot order saved on the room, as everyone sees it (hostSort is the host's draft). */
+  const [roomSort, setRoomSort] = useState<AuctionSortMode>('created_asc')
   const leavingRef = useRef(false)
   const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [connection, setConnection] = useState<ConnectionState>('live')
@@ -131,8 +134,9 @@ export default function RoomPage() {
       if (rf && typeof rf === 'object' && rf !== null && !Array.isArray(rf)) {
         const f = rf as Record<string, unknown>
         const s = f.sort
-        if (s === 'base_price_asc' || s === 'base_price_desc' || s === 'created_asc') {
+        if (s === 'base_price_asc' || s === 'base_price_desc' || s === 'created_asc' || s === 'sets') {
           setHostSort(s)
+          setRoomSort(s)
         }
         const pt = f.player_types
         if (Array.isArray(pt)) {
@@ -527,6 +531,7 @@ export default function RoomPage() {
     })
     if (sort === 'base_price_asc') pool = pool.sort((a, b) => a.base_price - b.base_price)
     else if (sort === 'base_price_desc') pool = pool.sort((a, b) => b.base_price - a.base_price)
+    else if (sort === 'sets') pool = pool.sort(compareBySets)
     setUpcomingLots(pool.slice(0, 5))
   }
 
@@ -573,7 +578,7 @@ export default function RoomPage() {
     if (!targetRoomId) return
     const { data, error } = await supabase
       .from('rooms')
-      .select('min_squad_size, max_squad_size, admin_user_id')
+      .select('min_squad_size, max_squad_size, admin_user_id, auction_filters')
       .eq('id', targetRoomId)
       .maybeSingle()
     if (!data) {
@@ -586,6 +591,10 @@ export default function RoomPage() {
       return
     }
     setOwnerUserId(data.admin_user_id != null ? String(data.admin_user_id) : null)
+    const savedSort = (data.auction_filters as { sort?: unknown } | null)?.sort
+    if (savedSort === 'base_price_asc' || savedSort === 'base_price_desc' || savedSort === 'created_asc' || savedSort === 'sets') {
+      setRoomSort(savedSort)
+    }
     const loadedMin = Number(data.min_squad_size)
     const loadedMax = Number(data.max_squad_size)
     if (Number.isFinite(loadedMin) && loadedMin > 0) setMinSquadSize(loadedMin)
@@ -1007,12 +1016,12 @@ export default function RoomPage() {
     computeUpcomingLots(
       allPlayers,
       auctionState?.current_player_id ?? null,
-      hostSort,
+      roomSort,
       hostTypes,
       hostMinBase,
       hostMaxBase
     )
-  }, [allPlayers, auctionState?.current_player_id, hostSort, hostTypes, hostMinBase, hostMaxBase])
+  }, [allPlayers, auctionState?.current_player_id, roomSort, hostTypes, hostMinBase, hostMaxBase])
 
   /**
    * Always-on sync, lobby and live. Realtime is the fast path; this makes sure a
@@ -1396,6 +1405,7 @@ export default function RoomPage() {
                             <option value="created_asc">Original list order</option>
                             <option value="base_price_asc">Base price — low to high</option>
                             <option value="base_price_desc">Base price — high to low</option>
+                            <option value="sets">By sets — Marquee, Batters, All-rounders, Keepers, Bowlers, Emerging</option>
                           </select>
                         </div>
                         <div>
@@ -1625,6 +1635,11 @@ export default function RoomPage() {
                     {currentPlayer.team ? `${currentPlayer.team} · ` : ''}
                     {currentPlayer.player_type} • Base: {formatMoney(currentPlayer.base_price)}
                   </div>
+                  {roomSort === 'sets' && (
+                    <div className="-mt-6 mb-8 text-center text-xs font-semibold text-yellow-300">
+                      {setProgress(currentPlayer, allPlayers, currentPlayer.id)}
+                    </div>
+                  )}
 
                   <div className="bg-slate-800/50 rounded-2xl p-4 sm:p-6 mb-6 border border-slate-700">
                     <div className="text-slate-400 text-xs uppercase text-center mb-2">Current Bid</div>
@@ -1703,7 +1718,7 @@ export default function RoomPage() {
                             />
                             <div className="flex-1 min-w-0">
                               <div className="text-white text-xs font-medium truncate">{p.player_name}</div>
-                              <div className="text-slate-500 text-[10px]">{p.player_type}{p.team ? ` · ${p.team}` : ''}</div>
+                              <div className="text-slate-500 text-[10px]">{p.player_type}{p.team ? ` · ${p.team}` : ''}{roomSort === 'sets' ? ` · ${setInfo(p.base_price, p.player_type).name}` : ''}</div>
                             </div>
                             <span className="text-slate-400 text-xs shrink-0">{formatMoney(p.base_price)}</span>
                           </div>

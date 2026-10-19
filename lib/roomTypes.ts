@@ -56,7 +56,7 @@ export interface PlayerInventoryRow {
   team?: string | null
 }
 
-export type AuctionSortMode = 'created_asc' | 'base_price_asc' | 'base_price_desc'
+export type AuctionSortMode = 'created_asc' | 'base_price_asc' | 'base_price_desc' | 'sets'
 
 export const FILTER_PLAYER_TYPES = ['BAT', 'BOWL', 'AR', 'WK', 'ALL'] as const
 export const SQUAD_ROLES = ['WK', 'BAT', 'ALL', 'BOWL'] as const
