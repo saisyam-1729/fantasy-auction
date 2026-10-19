@@ -21,6 +21,7 @@
 | 9 | `auto_hammer.sql` | optional server-side auto-sell |
 | 10 | `undo_last_sale.sql` | host "Undo last sale" |
 | 11 | `indexes.sql` | indexes for RLS and lot queries |
+| 12 | `pause_close_away.sql` | pause reasons, host Close with message, away auto-pause heartbeat |
 
 Order matters because files 3 and 5 also define `place_auction_bid`; file 6 must be its last definition. Files 3, 5 and 9 define `auction_hammer_advance`; file 9 is the last. Do not run an earlier file alone against a live database.
 
@@ -32,4 +33,4 @@ Production is the only database today. Prefer a second Supabase project for stag
 
 ## Testing database rules
 
-`place_auction_bid` and the host functions need a signed-in user (`auth.uid()`). `npm run db:test` runs the rule tests in `scripts/db-tests/` (87 checks: bid rules, security attacks, auto-sell, undo). Each file runs in a single transaction that inserts temporary `auth.users`, sets `request.jwt.claim.sub` to act as them, and always rolls back, so nothing persists. They read `SUPABASE_DB_URL`; point it at staging. They are not part of CI because CI has no database secret.
+`place_auction_bid` and the host functions need a signed-in user (`auth.uid()`). `npm run db:test` runs the rule tests in `scripts/db-tests/` (107 checks: bid rules, security attacks, auto-sell, undo, pause and close). Each file runs in a single transaction that inserts temporary `auth.users`, sets `request.jwt.claim.sub` to act as them, and always rolls back, so nothing persists. They read `SUPABASE_DB_URL`; point it at staging. They are not part of CI because CI has no database secret.

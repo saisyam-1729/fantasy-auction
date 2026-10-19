@@ -29,6 +29,8 @@ export interface Player {
 export interface AuctionState {
   is_active: boolean
   is_paused: boolean
+  pause_reason?: 'host' | 'away' | 'closed' | null
+  pause_message?: string | null
   current_player_id: string | null
   current_bid: number
   top_bidder_id: string | null

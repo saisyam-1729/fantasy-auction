@@ -24,7 +24,10 @@ export function useAutoSell({
   finalize: () => Promise<void>
 }) {
   const finalizeRef = useRef(finalize)
-  finalizeRef.current = finalize
+  // Keep the latest callback without restarting the timer.
+  useEffect(() => {
+    finalizeRef.current = finalize
+  })
 
   useEffect(() => {
     if (!enabled || !expired || !active || paused || !hasTopBidder) return

@@ -31,6 +31,8 @@ Money is in rupees (1 L = 100,000, 1 Cr = 10,000,000). Rules live in `lib/` and 
 - **Squad size** (`lib/purse.ts`): minimum 12, maximum 15 by default; the host sets both (1–30) before starting.
 - **Purse lock**: a bid may fill one slot; money is reserved only for the *other* slots still needed to reach the minimum, at the cheapest other unsold base price. At the maximum, no more bids.
 - **Selling**: the host presses Hammer or Pass. Optionally a room can enable **auto-sell**: 30 s after the last bid any member's browser asks the database to sell to the top bidder (exactly once). Lots with no bids still wait for the host.
+- **Pause, Close and away**: the host can Pause, or **Close auction** with an optional message every player sees (resume later). If a player who was connected drops for 45 s the database pauses the auction ("a player disconnected"); the host resumes manually. Each browser sends a heartbeat every 10 s while a lot is live.
+- **Other tabs**: a slim live bar (lot, bid, holder, timer, Bid button) stays on screen while browsing squads or insights.
 - **Insights tab**: five fixed charts (purse vs slots, roles, spend concentration, premium, timeline) and a rule-based strategy label, computed in `lib/insights.ts`.
 
 ## Code map

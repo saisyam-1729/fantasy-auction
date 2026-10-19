@@ -14,6 +14,9 @@ import { computeInsights, rivalsStrip } from '@/lib/insights'
 import InsightsPanel from '@/components/InsightsPanel'
 import SquadBoards from '@/components/room/SquadBoards'
 import MiniAuctionBar from '@/components/room/MiniAuctionBar'
+import PauseBanner from '@/components/room/PauseBanner'
+import CloseAuctionDialog from '@/components/room/CloseAuctionDialog'
+import { useHeartbeat } from '@/hooks/useHeartbeat'
 import ResultsPanel from '@/components/room/ResultsPanel'
 import PlayerAvatar from '@/components/room/PlayerAvatar'
 import ConnectionBanner, { type ConnectionState } from '@/components/room/ConnectionBanner'
@@ -67,6 +70,7 @@ export default function RoomPage() {
   const [minSquadSize, setMinSquadSize] = useState(DEFAULT_MIN_SQUAD)
   const [maxSquadSize, setMaxSquadSize] = useState(DEFAULT_MAX_SQUAD)
   const [autoHammer, setAutoHammer] = useState(false)
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [connection, setConnection] = useState<ConnectionState>('live')
   const connectionRef = useRef<ConnectionState>('live')
   connectionRef.current = connection
@@ -612,6 +616,17 @@ export default function RoomPage() {
     await fetchAuctionState(roomId)
   }
 
+  async function hostClose(message: string) {
+    if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
+    setShowCloseDialog(false)
+    const { error } = await supabase.rpc('auction_close', { p_room_id: roomId, p_message: message })
+    if (error) {
+      alert('Could not close the auction: ' + error.message + '\n\nRun npm run db:apply (pause_close_away.sql).')
+      return
+    }
+    await fetchAuctionState(roomId)
+  }
+
   async function hostHammer(action: 'sold' | 'pass') {
     if (!roomId || (!currentUser?.is_admin && !canUseHostControls)) return
     setHostFilterMessage('')
@@ -959,6 +974,19 @@ export default function RoomPage() {
     void fetchAllPlayersRef.current(roomId)
   }, [roomId, loading, auctionState?.is_active, auctionState?.is_paused, auctionState?.current_player_id])
 
+  /** Tell the database we are here; it pauses the auction if someone else has dropped. */
+  useHeartbeat({
+    active: Boolean(roomId && auctionState?.is_active),
+    beat: async () => {
+      if (!roomId) return null
+      const { data } = await supabase.rpc('auction_heartbeat', { p_room_id: roomId })
+      return typeof data === 'string' ? data : null
+    },
+    onPaused: () => {
+      if (roomId) void fetchAuctionState(roomId)
+    },
+  })
+
   const BID_TIMEOUT_SECONDS = 30
 
   /** Counts down from BID_TIMEOUT_SECONDS after the last bid. Freezes when paused. */
@@ -1168,6 +1196,19 @@ export default function RoomPage() {
           </button>
         ))}
       </div>
+
+      {auctionState?.is_active && auctionState.is_paused && (
+        <PauseBanner
+          reason={auctionState.pause_reason}
+          message={auctionState.pause_message}
+          isHost={showHostTools}
+          onResume={() => void hostPauseResume(false)}
+        />
+      )}
+
+      {showCloseDialog && (
+        <CloseAuctionDialog onCancel={() => setShowCloseDialog(false)} onConfirm={(m) => void hostClose(m)} />
+      )}
 
       <div className="max-w-7xl mx-auto">
         {activeTab === 'auction' && (
@@ -1415,6 +1456,14 @@ export default function RoomPage() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => setShowCloseDialog(true)}
+                          disabled={auctionState.pause_reason === 'closed'}
+                          className="px-4 py-2 rounded-xl text-sm font-semibold border border-red-500/50 bg-red-950/50 text-red-200 hover:bg-red-900/60 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          🔒 Close auction
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => void hostHammer('sold')}
                           disabled={!auctionState.top_bidder_id || auctionState.is_paused}
                           className={`px-4 py-2 rounded-xl text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed border transition ${
@@ -1506,13 +1555,6 @@ export default function RoomPage() {
                       </div>
                     )}
                   </div>
-
-                  {auctionState.is_paused && (
-                    <div className="flex items-center justify-center gap-2 mb-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm font-medium">
-                      <span>⏸</span>
-                      <span>Auction paused — the host is taking a moment</span>
-                    </div>
-                  )}
 
                   {bidBtn && (
                     <div className="mb-4 sticky bottom-3 z-10 rounded-2xl bg-slate-900/80 backdrop-blur p-2 shadow-lg shadow-black/40 lg:static lg:bg-transparent lg:p-0 lg:shadow-none">
