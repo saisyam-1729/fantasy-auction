@@ -935,9 +935,15 @@
   },
   {
     "name": "Mitchell Marsh",
-    "status": "no_photo",
+    "status": "exact",
     "title": "Mitchell Marsh",
-    "team": "LSG"
+    "team": "LSG",
+    "description": "Australian cricketer",
+    "thumb": "https://upload.wikimedia.org/wikipedia/commons/7/73/Mitchell_Marsh.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+    "licence": "CC BY 2.0",
+    "artist": "www.davidmolloyphotography.com",
+    "nonFree": false,
+    "source": "https://commons.wikimedia.org/wiki/File:Mitchell_Marsh.jpg"
   },
   {
     "name": "Mitchell Owen",
