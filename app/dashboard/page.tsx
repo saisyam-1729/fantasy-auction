@@ -6,6 +6,18 @@ import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD } from '@/lib/purse'
 import { DEFAULT_FORM, parseSettingsForm, type SettingsForm } from '@/lib/roomSettings'
 import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
+import DraftHome from '@/components/draft/DraftHome'
+
+type DashboardTab = 'auction' | 'smat'
+const TAB_KEY = 'dashboard-tab'
+
+function savedTab(): DashboardTab {
+  try {
+    return typeof window !== 'undefined' && window.localStorage.getItem(TAB_KEY) === 'smat' ? 'smat' : 'auction'
+  } catch {
+    return 'auction'
+  }
+}
 
 type JoinableRoom = {
   id: string
@@ -21,6 +33,16 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'menu' | 'create' | 'join'>('menu')
+  const [tab, setTabState] = useState<DashboardTab>(savedTab)
+
+  function setTab(next: DashboardTab) {
+    setTabState(next)
+    try {
+      window.localStorage.setItem(TAB_KEY, next)
+    } catch {
+      // private mode: the tab just isn't remembered
+    }
+  }
   
   // Create Room State
   const [roomName, setRoomName] = useState('')
@@ -280,7 +302,7 @@ export default function DashboardPage() {
       <div className="max-w-4xl mx-auto mb-8">
         <div className="flex justify-between items-center backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">🏏 IPL Auction</h1>
+            <h1 className="text-2xl font-bold text-white">🏏 {tab === 'smat' ? 'SMAT 2026 Draft' : 'IPL Auction'}</h1>
             <p className="text-slate-300 text-sm">Welcome, {user?.user_metadata?.username || user?.email}</p>
           </div>
           <button
@@ -292,8 +314,42 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Auction / Draft tabs */}
+      <div className="max-w-2xl mx-auto mb-6">
+        <div role="tablist" className="grid grid-cols-2 gap-1 rounded-2xl bg-white/10 border border-white/20 p-1">
+          {([
+            ['auction', 'IPL Auction'],
+            ['smat', 'SMAT 2026'],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={`py-2.5 rounded-xl text-sm font-semibold transition ${
+                tab === id
+                  ? id === 'smat'
+                    ? 'bg-emerald-500 text-slate-900'
+                    : 'bg-yellow-500 text-slate-900'
+                  : 'text-slate-300 hover:bg-white/10'
+              }`}
+            >
+              {label}
+              {id === 'smat' && <span className="ml-1 text-xs font-normal opacity-80">Draft</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'smat' && (
+        <div className="max-w-2xl mx-auto">
+          <DraftHome />
+        </div>
+      )}
+
       {/* Main Content */}
-      <div className="max-w-2xl mx-auto">
+      <div className={tab === 'auction' ? 'max-w-2xl mx-auto' : 'hidden'}>
         
         {/* Menu View */}
         {view === 'menu' && !createdRoom && (

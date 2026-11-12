@@ -20,6 +20,7 @@ npm run dev                        # http://localhost:3000
 | `npm run build` | Production build (works without Supabase env) |
 | `npm run db:test` | Database rule tests against `SUPABASE_DB_URL` (rolled back, nothing persists) |
 | `npm run db:apply` | Apply `supabase/*.sql` in order, in one transaction. Add `-- --dry` to roll back |
+| `node scripts/import-smat2026.cjs <xlsx>` | Rebuild the SMAT 2026 draft pool seed from the squad spreadsheet |
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and build on every push and PR.
 
@@ -38,6 +39,7 @@ Money is in rupees (1 L = 100,000, 1 Cr = 10,000,000). Rules live in `lib/` and 
 - **Cleaning up rooms**: every room copies the 250-player list, so old rooms add up. The owner can press **Delete room** in the host panel. `npm run db:cleanup` lists rooms idle for 30+ days (`-- --days 14` to change), and only deletes them with `-- --apply`. It is a dry run by default.
 - **Auction by sets**: the host can choose lot order "By sets": Marquee (base ₹3 Cr and up), then Batters, All-rounders, Wicketkeepers, Bowlers, then Emerging (₹20 L base), high to low inside each set. The lot card shows the set and how many are left in it. Defined in `lib/sets.ts` and `supabase/auction_sets.sql`.
 - **Room settings**: when creating a room the host can set the starting budget (default ₹100 Cr), the lot timer (10–120 s, default 30) and the bid steps (two thresholds and three steps, default 10 / 20 / 25 L under ₹2 Cr and ₹5 Cr). They are stored on the room (`budget`, `bid_timer_seconds`, `slab_config`), enforced by the database, and apply to bidding, the countdown, auto-sell and the "going once" call. Settings are fixed once a room is created.
+- **SMAT 2026 draft** (`/draft/[id]`, the "SMAT 2026" tab on the dashboard): no money, no bidding. 3 to 10 teams join with a room ID and key. The host spins a wheel; each spin gives the next pick position to a random team still on the wheel, and the last team left takes the last position. Picks then snake (1, 2, 3 … 3, 2, 1 …) from one shared pool of 544 Syed Mushtaq Ali Trophy players until every team has its picks (1–30, default 15). Only the team on the clock may pick; the host can pick for an absent team and undo the last pick. Rules are in `lib/draft.ts` and enforced by `supabase/draft.sql`. To refresh the pool when squads change, run `node scripts/import-smat2026.cjs <SMAT_2026_27_Players.xlsx>` and then `npm run db:apply`.
 - **Insights tab**: five fixed charts (purse vs slots, roles, spend concentration, premium, timeline) and a rule-based strategy label, computed in `lib/insights.ts`.
 
 ## Code map

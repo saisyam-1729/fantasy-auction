@@ -4,3 +4,12 @@
   outline: 2px solid #facc15;
   outline-offset: 2px;
 }
+
+/* Draft wheel: reveal the result once the spin has landed */
+@keyframes draft-reveal {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+.draft-reveal {
+  animation: draft-reveal 0.4s ease-out both;
+}
