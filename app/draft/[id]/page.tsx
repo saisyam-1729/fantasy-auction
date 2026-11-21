@@ -6,6 +6,7 @@ import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import DraftWheel from '@/components/draft/DraftWheel'
 import DraftPool from '@/components/draft/DraftPool'
+import LatestPick from '@/components/draft/LatestPick'
 import { poolLabel } from '@/lib/events'
 import {
   draftSummaryText,
@@ -316,6 +317,16 @@ export default function DraftRoomPage() {
         </div>
       ) : (
         <>
+          {lastPick && (
+            <LatestPick
+              pick={lastPick}
+              player={playersById.get(lastPick.player_id)}
+              picker={membersById.get(lastPick.member_id)}
+              teams={n}
+              isMine={lastPick.member_id === me?.id}
+            />
+          )}
+
           {/* On the clock */}
           {room.status === 'DRAFTING' && onClock ? (
             <div className={`mb-4 rounded-2xl p-4 border ${myTurn ? 'bg-emerald-500/25 border-emerald-400 shadow-lg shadow-emerald-500/20' : 'bg-white/10 border-white/20'}`}>
@@ -327,11 +338,6 @@ export default function DraftRoomPage() {
                   <p className="text-xl font-bold text-white">{myTurn ? 'Your pick!' : `${onClock.username} is picking`}</p>
                   {!myTurn && isHost && <p className="text-xs text-slate-300">As host you can pick for them if they are away.</p>}
                 </div>
-                {lastPick && (
-                  <p className="text-sm text-slate-200">
-                    Last: <span className="font-semibold">{playersById.get(lastPick.player_id)?.player_name ?? '?'}</span> → {membersById.get(lastPick.member_id)?.username}
-                  </p>
-                )}
               </div>
               {next.length > 0 && (
                 <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
@@ -375,6 +381,7 @@ export default function DraftRoomPage() {
               <DraftPool
                 players={pool}
                 pickedBy={pickedBy}
+                latestPlayerId={lastPick?.player_id ?? null}
                 canPick={canPick}
                 pickLabel={myTurn ? 'Pick' : `Pick for ${onClock?.username ?? ''}`}
                 busy={busy}
@@ -386,13 +393,28 @@ export default function DraftRoomPage() {
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {ordered.map((m) => {
                   const mine = picks.filter((p) => p.member_id === m.id)
+                  const justPicked = lastPick?.member_id === m.id
                   return (
-                    <div key={m.id} className={`rounded-xl border p-3 ${onClock?.id === m.id ? 'border-emerald-400 bg-emerald-500/10' : 'border-slate-700 bg-slate-900/40'}`}>
-                      <div className="mb-2 flex items-center justify-between">
+                    <div
+                      key={m.id}
+                      className={`rounded-xl border-2 p-3 ${
+                        onClock?.id === m.id
+                          ? 'border-emerald-400 bg-emerald-500/10'
+                          : justPicked
+                            ? 'border-amber-400 bg-amber-500/10'
+                            : 'border-slate-700 bg-slate-900/40'
+                      }`}
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-2">
                         <span className="font-semibold text-white truncate">
                           {m.order_pos}. {m.username}
                           {m.user_id === user?.id && <span className="text-slate-400 font-normal"> (you)</span>}
                         </span>
+                        {onClock?.id === m.id ? (
+                          <span className="shrink-0 text-[10px] font-bold uppercase text-emerald-300">On the clock</span>
+                        ) : justPicked ? (
+                          <span className="shrink-0 text-[10px] font-bold uppercase text-amber-300">Just picked</span>
+                        ) : null}
                         <span className="text-xs text-slate-400">
                           {mine.length}/{room.picks_per_team}
                         </span>
@@ -404,7 +426,10 @@ export default function DraftRoomPage() {
                           {mine.map((p) => {
                             const pl = playersById.get(p.player_id)
                             return (
-                              <li key={p.id} className="text-sm text-slate-100 flex justify-between gap-2">
+                              <li
+                                key={p.id}
+                                className={`text-sm flex justify-between gap-2 rounded px-1 -mx-1 ${p.id === lastPick?.id ? 'bg-amber-500/20 text-amber-100 font-semibold' : 'text-slate-100'}`}
+                              >
                                 <span className="truncate">{pl?.player_name ?? '?'}</span>
                                 <span className="text-xs text-slate-400 shrink-0">{pl?.team}</span>
                               </li>
@@ -426,7 +451,7 @@ export default function DraftRoomPage() {
                   const who = membersById.get(p.member_id)
                   const rr = roundOf(p.pick_no, n)
                   return (
-                    <li key={p.id} className="py-2 flex items-center gap-3 text-sm">
+                    <li key={p.id} className={`py-2 flex items-center gap-3 text-sm ${p.id === lastPick?.id ? 'bg-amber-500/15 -mx-2 px-2 rounded-lg font-semibold' : ''}`}>
                       <span className="w-14 shrink-0 text-xs text-slate-400">
                         R{rr.round}.{rr.pickInRound}
                       </span>

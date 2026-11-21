@@ -12,6 +12,7 @@ import type { DraftMember, DraftPoolPlayer } from '@/lib/draft'
 export default function DraftPool({
   players,
   pickedBy,
+  latestPlayerId = null,
   canPick,
   pickLabel,
   busy,
@@ -20,6 +21,8 @@ export default function DraftPool({
   players: DraftPoolPlayer[]
   /** player id -> member who picked them */
   pickedBy: Map<number, DraftMember>
+  /** The most recently picked player, highlighted when picked players are shown. */
+  latestPlayerId?: number | null
   canPick: boolean
   pickLabel: string
   busy: boolean
@@ -89,7 +92,10 @@ export default function DraftPool({
           const owner = pickedBy.get(p.id)
           const confirming = confirmId === p.id
           return (
-            <li key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${owner ? 'opacity-50' : ''}`}>
+            <li
+              key={p.id}
+              className={`flex items-center gap-3 px-3 py-2.5 ${p.id === latestPlayerId ? 'bg-amber-500/15' : owner ? 'opacity-50' : ''}`}
+            >
               <div className="w-9 h-9 shrink-0 rounded-full bg-slate-700 text-slate-100 text-xs font-bold flex items-center justify-center" aria-hidden>
                 {initials(p.player_name)}
               </div>
