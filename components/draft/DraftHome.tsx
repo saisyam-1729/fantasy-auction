@@ -3,16 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import {
-  DEFAULT_PICKS_PER_TEAM,
-  DRAFT_MAX_TEAMS,
-  DRAFT_MIN_TEAMS,
-  SMAT_POOL,
-  type DraftStatus,
-} from '@/lib/draft'
+import { DEFAULT_PICKS_PER_TEAM, DRAFT_MAX_TEAMS, DRAFT_MIN_TEAMS, type DraftStatus } from '@/lib/draft'
+import type { CricketEvent } from '@/lib/events'
 
 type MyDraft = { id: string; room_code: string; name: string; status: DraftStatus; created_at: string }
-type OpenDraft = { id: string; room_code: string; name: string; member_count: number; max_members: number }
+type OpenDraft = { id: string; room_code: string; name: string; pool: string; member_count: number; max_members: number }
 
 const input =
   'w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
@@ -22,8 +17,8 @@ const card = 'backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl sh
 
 const STATUS_LABEL: Record<DraftStatus, string> = { LOBBY: 'In lobby', DRAFTING: 'Drafting', DONE: 'Finished' }
 
-/** The SMAT 2026 tab on the dashboard: your drafts, create a draft, join a draft. */
-export default function DraftHome() {
+/** An event's draft format: your drafts, create a draft, join a draft. */
+export default function DraftHome({ event }: { event: CricketEvent }) {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const [view, setView] = useState<'menu' | 'create' | 'join'>('menu')
@@ -47,6 +42,7 @@ export default function DraftHome() {
     void supabase
       .from('draft_rooms')
       .select('id, room_code, name, status, created_at')
+      .eq('pool', event.pool)
       .order('created_at', { ascending: false })
       .limit(20)
       .then(({ data }) => {
@@ -57,18 +53,18 @@ export default function DraftHome() {
     return () => {
       live = false
     }
-  }, [supabase])
+  }, [supabase, event.pool])
 
   useEffect(() => {
     if (view !== 'join') return
     let live = true
     void supabase.rpc('list_open_draft_rooms').then(({ data }) => {
-      if (live) setOpen((data ?? []) as OpenDraft[])
+      if (live) setOpen(((data ?? []) as OpenDraft[]).filter((d) => d.pool === event.pool))
     })
     return () => {
       live = false
     }
-  }, [view, supabase])
+  }, [view, supabase, event.pool])
 
   function go(next: 'menu' | 'create' | 'join') {
     setMessage('')
@@ -106,7 +102,7 @@ export default function DraftHome() {
       p_name: name,
       p_picks_per_team: picks,
       p_max_members: teams,
-      p_pool: SMAT_POOL,
+      p_pool: event.pool,
     })
     setBusy(false)
     const row = Array.isArray(data) ? data[0] : null
@@ -154,7 +150,7 @@ export default function DraftHome() {
         ))}
         <button
           type="button"
-          onClick={() => void copy(`Join my SMAT 2026 draft\nRoom ID: ${created.code}\nRoom Key: ${created.key}`, 'Invite')}
+          onClick={() => void copy(`Join my ${event.name} draft\nRoom ID: ${created.code}\nRoom Key: ${created.key}`, 'Invite')}
           className="w-full mb-4 py-3 rounded-xl border-2 border-emerald-500/60 text-emerald-200 font-semibold hover:bg-emerald-500/10 transition"
         >
           Copy invite (ID + key)
@@ -176,10 +172,10 @@ export default function DraftHome() {
       {view === 'menu' && (
         <div className={card}>
           <div className="text-center mb-6">
-            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">SMAT 2026 Draft</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">{event.name} Draft</h2>
             <p className="text-slate-300 text-sm">
-              No money, no bidding. Everyone sees the same pool of Syed Mushtaq Ali Trophy players and takes turns
-              picking in snake order (1, 2, 3 … 3, 2, 1 …). The host spins a wheel to set the order.
+              No money, no bidding. Everyone sees the same pool of {event.players} {event.fullName} players and takes
+              turns picking in snake order (1, 2, 3 … 3, 2, 1 …). The host spins a wheel to set the order.
             </p>
           </div>
           <div className="space-y-4">
@@ -218,11 +214,11 @@ export default function DraftHome() {
       {view === 'create' && (
         <div className={card}>
           <button type="button" onClick={() => go('menu')} className="mb-5 text-slate-300 hover:text-white">← Back</button>
-          <h2 className="text-2xl font-bold text-white mb-5">Create draft room</h2>
+          <h2 className="text-2xl font-bold text-white mb-5">Create {event.name} draft room</h2>
           <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Room name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. SMATFriends" className={input} />
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Friends2026" className={input} />
               <p className="text-xs text-slate-400 mt-1">Letters and digits only.</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -270,7 +266,7 @@ export default function DraftHome() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Room ID</label>
-              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. SMATFriends_42" className={input} />
+              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. Friends2026_42" className={input} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Room Key (6 digits)</label>

@@ -6,6 +6,7 @@ import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import DraftWheel from '@/components/draft/DraftWheel'
 import DraftPool from '@/components/draft/DraftPool'
+import { poolLabel } from '@/lib/events'
 import {
   draftSummaryText,
   inDraftOrder,
@@ -145,8 +146,8 @@ export default function DraftRoomPage() {
       }
     }
     wasMyTurn.current = myTurn
-    document.title = myTurn ? 'Your pick! · SMAT Draft' : 'SMAT 2026 Draft'
-  }, [myTurn])
+    document.title = myTurn ? `Your pick! · ${poolLabel(room?.pool)} Draft` : `${poolLabel(room?.pool)} Draft`
+  }, [myTurn, room?.pool])
 
   async function call(fn: string, args: Record<string, unknown>, ok?: string) {
     setBusy(true)
@@ -215,7 +216,7 @@ export default function DraftRoomPage() {
             <button type="button" onClick={() => router.push('/dashboard')} className="text-xs text-slate-400 hover:text-white mb-1">
               ← Dashboard
             </button>
-            <h1 className="text-xl sm:text-2xl font-bold text-white truncate">🏏 {room.name} · SMAT 2026 Draft</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-white truncate">🏏 {room.name} · {poolLabel(room.pool)} Draft</h1>
             <p className="text-xs text-slate-300 mt-1">
               <span className="font-mono">{room.room_code}</span> · {n}/{room.max_members} teams · {room.picks_per_team} picks each
               {me ? ` · you are ${me.username}` : ''}
@@ -236,7 +237,7 @@ export default function DraftRoomPage() {
             </span>
             <button
               type="button"
-              onClick={() => void copy(`Join my SMAT 2026 draft\nRoom ID: ${room.room_code}\nRoom Key: ${room.room_key}`, 'Invite')}
+              onClick={() => void copy(`Join my ${poolLabel(room.pool)} draft\nRoom ID: ${room.room_code}\nRoom Key: ${room.room_key}`, 'Invite')}
               className="px-2 py-1 rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20"
             >
               Copy invite

@@ -32,6 +32,7 @@ const ORDER = [
   'room_settings.sql',
   'draft.sql',
   'draft_pool_smat2026_seed.generated.sql',
+  'ilt20_2026_seed.generated.sql',
 ]
 
 const root = path.join(__dirname, '..')

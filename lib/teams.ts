@@ -1,4 +1,4 @@
-/** IPL franchise colours, used for the initials avatar when a player has no photo. */
+/** IPL and ILT20 franchise colours, used for the initials avatar when a player has no photo. */
 const TEAM_COLOURS: Record<string, { bg: string; fg: string }> = {
   CSK: { bg: '#F9CD05', fg: '#1B1B1B' },
   MI: { bg: '#004BA0', fg: '#FFFFFF' },
@@ -10,6 +10,13 @@ const TEAM_COLOURS: Record<string, { bg: string; fg: string }> = {
   PBKS: { bg: '#ED1B24', fg: '#FFFFFF' },
   LSG: { bg: '#00A3E0', fg: '#0B1B2B' },
   GT: { bg: '#1C2C5B', fg: '#C9A227' },
+  // ILT20
+  'ABU DHABI KNIGHT RIDERS': { bg: '#3A225D', fg: '#F2C200' },
+  'DESERT VIPERS': { bg: '#C8102E', fg: '#FFFFFF' },
+  'DUBAI CAPITALS': { bg: '#1D3E8A', fg: '#FFFFFF' },
+  'GULF GIANTS': { bg: '#F47920', fg: '#1B1B1B' },
+  'MI EMIRATES': { bg: '#004BA0', fg: '#FFFFFF' },
+  'SHARJAH WARRIORZ': { bg: '#6C1D45', fg: '#FFFFFF' },
 }
 
 const NEUTRAL = { bg: '#334155', fg: '#F1F5F9' }

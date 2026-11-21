@@ -9,6 +9,7 @@ import {
 } from '@/lib/auctionConsensus'
 import { DEFAULT_SLABS, describeSlabs, nextBidIncrement, parseSlabs, type SlabConfig } from '@/lib/bidSlabs'
 import { DEFAULT_TIMER_SECONDS } from '@/lib/roomSettings'
+import { eventForInventory } from '@/lib/events'
 import { bidButtonLabel, bidButtonState } from '@/lib/bidButton'
 import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD, purseLock } from '@/lib/purse'
 import { computeInsights, rivalsStrip } from '@/lib/insights'
@@ -78,6 +79,8 @@ export default function RoomPage() {
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null)
   /** This room's lot timer and bid steps (the host chose them when creating the room). */
   const [bidTimerSeconds, setBidTimerSeconds] = useState(DEFAULT_TIMER_SECONDS)
+  /** Event name when the room uses an event's player list (e.g. "ILT20 2026"). */
+  const [eventName, setEventName] = useState<string | null>(null)
   const [slabs, setSlabs] = useState<SlabConfig>(DEFAULT_SLABS)
   /** The lot order saved on the room, as everyone sees it (hostSort is the host's draft). */
   const [roomSort, setRoomSort] = useState<AuctionSortMode>('created_asc')
@@ -169,6 +172,7 @@ export default function RoomPage() {
       setAutoHammer(Boolean((room as { auto_hammer?: boolean }).auto_hammer))
       setOwnerUserId(room.admin_user_id != null ? String(room.admin_user_id) : null)
       applyRoomSettings(room as { bid_timer_seconds?: unknown; slab_config?: unknown })
+      setEventName(eventForInventory((room as { player_inventory_type?: string }).player_inventory_type)?.name ?? null)
       const roomSquad = room as { min_squad_size?: number; max_squad_size?: number }
       const loadedMin = Number(roomSquad.min_squad_size)
       const loadedMax = Number(roomSquad.max_squad_size)
@@ -1185,7 +1189,7 @@ export default function RoomPage() {
           <div className="flex flex-col gap-3">
             <div className="flex justify-between items-center flex-wrap gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-white">🏏 Auction Room</h1>
+                <h1 className="text-2xl font-bold text-white">🏏 {eventName ? `${eventName} Auction` : 'Auction Room'}</h1>
                 <p className="text-slate-300 text-sm flex flex-wrap items-center gap-2">
                   <span>
                     {allUsers.length} Players • Squad {minSquadSize}–{maxSquadSize} • {bidTimerSeconds}s timer • {currentUser?.display_name}
