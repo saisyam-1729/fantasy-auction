@@ -23,6 +23,10 @@ export type DraftRoom = {
   /** The last wheel spin; after a reset only `seq` is kept. */
   last_spin: { seq: number; member_id?: string; position?: number; last_member_id?: string | null } | null
   started_at: string | null
+  /** Seconds per turn, or null for no timer. */
+  pick_seconds?: number | null
+  /** When the current turn began (the pick timer counts from here). */
+  turn_started_at?: string | null
 }
 
 export type DraftMember = {
@@ -140,3 +144,28 @@ export function draftSummaryText(
   }
   return lines.join('\n')
 }
+
+/** When the current turn runs out (ms since epoch), or null for an untimed or finished draft. */
+export function turnDeadline(room: Pick<DraftRoom, 'status' | 'pick_seconds' | 'turn_started_at'>): number | null {
+  if (room.status !== 'DRAFTING' || !room.pick_seconds || !room.turn_started_at) return null
+  return new Date(room.turn_started_at).getTime() + room.pick_seconds * 1000
+}
+
+/** Move one id up or down in an ordered list; unchanged at the ends or when missing. */
+export function moveInList<T>(list: T[], item: T, dir: -1 | 1): T[] {
+  const i = list.indexOf(item)
+  const j = i + dir
+  if (i < 0 || j < 0 || j >= list.length) return list
+  const next = [...list]
+  ;[next[i], next[j]] = [next[j], next[i]]
+  return next
+}
+
+export const PICK_TIMER_OPTIONS = [
+  { value: '', label: 'No timer' },
+  { value: '30', label: '30 seconds' },
+  { value: '60', label: '1 minute' },
+  { value: '90', label: '90 seconds' },
+  { value: '120', label: '2 minutes' },
+  { value: '300', label: '5 minutes' },
+] as const

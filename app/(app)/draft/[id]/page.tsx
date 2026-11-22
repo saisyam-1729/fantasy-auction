@@ -1,13 +1,25 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from '@/components/shell/AppShell'
 import DraftRoomView from '@/components/draft/DraftRoomView'
 import { Button, Card } from '@/components/ui'
 import { poolLabel } from '@/lib/events'
 import { inviteText } from '@/lib/invite'
-import { draftSummaryText, memberOnClock, type DraftMember, type DraftPick, type DraftPoolPlayer, type DraftRoom } from '@/lib/draft'
+import {
+  draftSummaryText,
+  memberOnClock,
+  moveInList,
+  turnDeadline,
+  type DraftMember,
+  type DraftPick,
+  type DraftPoolPlayer,
+  type DraftRoom,
+} from '@/lib/draft'
+import { useSecondsLeft } from '@/hooks/useSecondsLeft'
+import { useTurnSound } from '@/hooks/useTurnSound'
+import { useWakeLock } from '@/hooks/useWakeLock'
 
 /** Poll this often only while live updates are down; otherwise a slow safety refresh. */
 const FALLBACK_POLL_MS = 4000
@@ -27,6 +39,8 @@ export default function DraftRoomPage() {
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ text: string; bad?: boolean } | null>(null)
+  const [wishIds, setWishIds] = useState<number[]>([])
+  const [points, setPoints] = useState<Map<number, number>>(new Map())
 
   const flash = useCallback((text: string, bad = false) => {
     setNotice({ text, bad })
@@ -64,12 +78,20 @@ export default function DraftRoomPage() {
           .limit(2000)
         if (live) setPool((players ?? []) as DraftPoolPlayer[])
       }
-      if (live) setLoaded(true)
+      // my wishlist (private by RLS) and the pool's fantasy points for this draft
+      const [wl, pts] = await Promise.all([
+        supabase.from('draft_wishlist').select('player_id, rank, draft_members!inner(draft_id)').eq('draft_members.draft_id', id).order('rank'),
+        supabase.rpc('draft_pool_points', { p_draft_id: id }),
+      ])
+      if (!live) return
+      setWishIds(((wl.data ?? []) as { player_id: number }[]).map((w) => Number(w.player_id)))
+      setPoints(new Map(((pts.data ?? []) as { player_id: number; points: number }[]).map((p) => [Number(p.player_id), Number(p.points)])))
+      setLoaded(true)
     })()
     return () => {
       live = false
     }
-  }, [supabase, refresh])
+  }, [supabase, refresh, id])
 
   // Live updates. Polling runs fast only while the live channel is down.
   const channelUp = useRef(false)
@@ -108,6 +130,46 @@ export default function DraftRoomPage() {
   const me = members.find((m) => m.user_id === user.id) ?? null
   const onClock = room?.status === 'DRAFTING' ? memberOnClock(members, picks.length) : null
   const myTurn = Boolean(onClock && me && onClock.id === me.id)
+
+  // Pick timer: when a timed turn runs out, ask the database to auto-pick (once per
+  // pick, after a small random delay so seven screens don't all ask at once).
+  const deadline = room ? turnDeadline(room) : null
+  const secondsLeft = useSecondsLeft(deadline)
+  const autoAsked = useRef(-1)
+  useEffect(() => {
+    if (secondsLeft !== 0 || !room || room.status !== 'DRAFTING' || autoAsked.current === picks.length) return
+    autoAsked.current = picks.length
+    const pickNo = picks.length
+    const t = window.setTimeout(() => {
+      void supabase.rpc('draft_auto_pick', { p_draft_id: id, p_pick_no: pickNo }).then(() => refresh())
+    }, 300 + Math.random() * 1500)
+    return () => window.clearTimeout(t)
+  }, [secondsLeft, room, picks.length, supabase, id, refresh])
+
+  const sound = useTurnSound(myTurn)
+  useWakeLock(room?.status === 'DRAFTING')
+
+  // Wishlist: update the screen at once, then save the whole list.
+  const saveWish = useCallback(
+    (next: number[]) => {
+      setWishIds(next)
+      void supabase.rpc('draft_set_wishlist', { p_draft_id: id, p_player_ids: next }).then(({ error }) => {
+        if (error) flash('Could not save your list: ' + error.message, true)
+      })
+    },
+    [supabase, id, flash]
+  )
+  const wishlist = useMemo(
+    () =>
+      me
+        ? {
+            ids: wishIds,
+            toggle: (playerId: number) => saveWish(wishIds.includes(playerId) ? wishIds.filter((x) => x !== playerId) : [...wishIds, playerId]),
+            move: (playerId: number, dir: -1 | 1) => saveWish(moveInList(wishIds, playerId, dir)),
+          }
+        : undefined,
+    [me, wishIds, saveWish]
+  )
 
   // Tell the player when it becomes their turn.
   const wasMyTurn = useRef(false)
@@ -167,6 +229,10 @@ export default function DraftRoomPage() {
       userId={user.id}
       busy={busy}
       notice={notice}
+      wishlist={wishlist}
+      points={points}
+      secondsLeft={secondsLeft}
+      sound={sound}
       actions={{
         spin: () => void call('draft_spin_wheel', { p_draft_id: id }),
         start: () => void call('draft_start', { p_draft_id: id }, 'The draft has started'),

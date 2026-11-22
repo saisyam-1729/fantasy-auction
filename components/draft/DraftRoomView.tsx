@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import DraftWheel from '@/components/draft/DraftWheel'
-import DraftPool from '@/components/draft/DraftPool'
+import DraftPool, { type WishlistProps } from '@/components/draft/DraftPool'
 import LatestPick from '@/components/draft/LatestPick'
 import { Badge, Button, Card, PageHeader, Segmented, cx } from '@/components/ui'
 import { poolLabel } from '@/lib/events'
@@ -42,6 +42,14 @@ export type DraftRoomViewProps = {
   busy: boolean
   notice: { text: string; bad?: boolean } | null
   actions: DraftActions
+  /** The viewer's private, ordered shortlist (members only). */
+  wishlist?: WishlistProps
+  /** player id -> fantasy points for this draft, when known */
+  points?: Map<number, number>
+  /** Seconds left on a timed turn, null without a timer. */
+  secondsLeft?: number | null
+  /** Turn chime on/off. */
+  sound?: { enabled: boolean; toggle: () => void }
 }
 
 type Tab = 'pool' | 'teams' | 'log'
@@ -54,7 +62,7 @@ type Tab = 'pool' | 'teams' | 'log'
  * Laptop (lg): the pool sits beside the teams; Teams and Picks share the right side.
  * Wide (2xl): pool, teams and the pick feed are all visible at once.
  */
-export default function DraftRoomView({ room, members, picks, pool, userId, busy, notice, actions }: DraftRoomViewProps) {
+export default function DraftRoomView({ room, members, picks, pool, userId, busy, notice, actions, wishlist, points, secondsLeft = null, sound }: DraftRoomViewProps) {
   const [tab, setTab] = useState<Tab>('pool')
   const [rightTab, setRightTab] = useState<'teams' | 'log'>('teams')
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -113,11 +121,17 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
       }
       actions={
         <>
+          {sound && room.status !== 'DONE' && (
+            <Button size="sm" onClick={sound.toggle} aria-pressed={sound.enabled} title="Play a sound when it is your turn">
+              {sound.enabled ? '🔔 Sound on' : '🔕 Sound off'}
+            </Button>
+          )}
           {room.status === 'LOBBY' && (
             <Button size="sm" onClick={actions.copyInvite}>
               Copy invite link
             </Button>
           )}
+          {room.pick_seconds && room.status === 'LOBBY' && <Badge tone="sky">⏱ {room.pick_seconds}s per pick</Badge>}
           {room.status !== 'LOBBY' && (
             <Link href={`/leaderboard/${room.id}`} className="rounded-xl bg-sky-500 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-sky-400">
               🏆 Leaderboard
@@ -228,7 +242,7 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
 
           <Card className="md:col-span-2 xl:col-span-1">
             <h2 className="mb-3 text-lg font-bold text-white">Player pool</h2>
-            <DraftPool players={pool} pickedBy={pickedBy} canPick={false} pickLabel="" busy={false} onPick={() => {}} />
+            <DraftPool players={pool} pickedBy={pickedBy} canPick={false} pickLabel="" busy={false} onPick={() => {}} wishlist={wishlist} points={points} />
           </Card>
         </div>
         {hostTools}
@@ -240,13 +254,30 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
   const clock =
     room.status === 'DRAFTING' && onClock ? (
       <div className={cx('h-full rounded-2xl p-4 border', myTurn ? 'bg-emerald-500/25 border-emerald-400 shadow-lg shadow-emerald-500/20' : 'bg-white/10 border-white/20')}>
-        <p className="text-xs uppercase tracking-wide text-slate-300">
-          Round {round} · pick {pickInRound} of {n} · overall {pickNo + 1} of {total}
-        </p>
-        <p className="text-xl font-bold text-white">{myTurn ? 'Your pick!' : `${onClock.username} is picking`}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide text-slate-300">
+              Round {round} · pick {pickInRound} of {n} · overall {pickNo + 1} of {total}
+            </p>
+            <p className="text-xl font-bold text-white">{myTurn ? 'Your pick!' : `${onClock.username} is picking`}</p>
+          </div>
+          {secondsLeft != null && (
+            <span
+              className={cx(
+                'shrink-0 rounded-xl px-3 py-1.5 font-mono text-lg font-black tabular-nums',
+                secondsLeft <= 10 ? 'bg-red-500/30 text-red-100 animate-pulse' : 'bg-slate-900/60 text-white'
+              )}
+              aria-label={`${secondsLeft} seconds left`}
+            >
+              ⏱ {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}
+            </span>
+          )}
+        </div>
         <p className="text-xs text-slate-300">
           {myTurn
-            ? 'Choose a player from the pool.'
+            ? secondsLeft != null
+              ? 'Choose a player. When time runs out, the top of your list is picked for you.'
+              : 'Choose a player from the pool.'
             : myNext >= 0
               ? `Your next pick is in ${myNext + 1} ${myNext === 0 ? 'pick' : 'picks'}.`
               : isHost
@@ -288,6 +319,8 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
       pickLabel={myTurn ? 'Pick' : `Pick for ${onClock?.username ?? ''}`}
       busy={busy}
       onPick={actions.pick}
+      wishlist={wishlist}
+      points={points}
     />
   )
 

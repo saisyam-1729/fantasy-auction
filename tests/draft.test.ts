@@ -111,3 +111,22 @@ describe('text', () => {
     )
   })
 })
+
+describe('pick timer and wishlist helpers', () => {
+  it('computes the turn deadline only for timed, running drafts', async () => {
+    const { turnDeadline } = await import('@/lib/draft')
+    const t = '2026-11-23T10:00:00Z'
+    expect(turnDeadline({ status: 'DRAFTING', pick_seconds: 60, turn_started_at: t })).toBe(new Date(t).getTime() + 60_000)
+    expect(turnDeadline({ status: 'DRAFTING', pick_seconds: null, turn_started_at: t })).toBeNull()
+    expect(turnDeadline({ status: 'DONE', pick_seconds: 60, turn_started_at: t })).toBeNull()
+    expect(turnDeadline({ status: 'DRAFTING', pick_seconds: 60, turn_started_at: null })).toBeNull()
+  })
+
+  it('moves wishlist entries up and down', async () => {
+    const { moveInList } = await import('@/lib/draft')
+    expect(moveInList([1, 2, 3], 3, -1)).toEqual([1, 3, 2])
+    expect(moveInList([1, 2, 3], 1, 1)).toEqual([2, 1, 3])
+    expect(moveInList([1, 2, 3], 1, -1)).toEqual([1, 2, 3])
+    expect(moveInList([1, 2, 3], 9, 1)).toEqual([1, 2, 3])
+  })
+})

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { DEFAULT_PICKS_PER_TEAM, DRAFT_MAX_TEAMS, DRAFT_MIN_TEAMS, type DraftStatus } from '@/lib/draft'
+import { DEFAULT_PICKS_PER_TEAM, DRAFT_MAX_TEAMS, DRAFT_MIN_TEAMS, PICK_TIMER_OPTIONS, type DraftStatus } from '@/lib/draft'
 import type { CricketEvent } from '@/lib/events'
 import { inviteText } from '@/lib/invite'
 
@@ -29,6 +29,7 @@ export default function DraftHome({ event }: { event: CricketEvent & { pool: str
   const [name, setName] = useState('')
   const [picksPerTeam, setPicksPerTeam] = useState(String(DEFAULT_PICKS_PER_TEAM))
   const [maxTeams, setMaxTeams] = useState(String(DRAFT_MAX_TEAMS))
+  const [pickSeconds, setPickSeconds] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [created, setCreated] = useState<{ id: string; code: string; key: string } | null>(null)
@@ -103,6 +104,7 @@ export default function DraftHome({ event }: { event: CricketEvent & { pool: str
       p_name: name,
       p_picks_per_team: picks,
       p_max_members: teams,
+      p_pick_seconds: pickSeconds ? Number(pickSeconds) : null,
       p_pool: event.pool,
     })
     setBusy(false)
@@ -236,6 +238,20 @@ export default function DraftHome({ event }: { event: CricketEvent & { pool: str
               The draft needs at least {DRAFT_MIN_TEAMS} teams to start, and takes up to {DRAFT_MAX_TEAMS}. It ends when every
               team has made its picks.
             </p>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2" htmlFor="pick-timer">Pick timer</label>
+              <select id="pick-timer" value={pickSeconds} onChange={(e) => setPickSeconds(e.target.value)} className={input}>
+                {PICK_TIMER_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-400 mt-1">
+                With a timer, a team that runs out of time gets the top available player from its wishlist, or else the player with the most
+                points. Without one, the host can pick for an absent team.
+              </p>
+            </div>
             <button type="button" onClick={() => void create()} disabled={busy} className={primary}>
               {busy ? 'Creating…' : 'Create draft room'}
             </button>
