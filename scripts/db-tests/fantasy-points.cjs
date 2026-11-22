@@ -81,6 +81,20 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
     try { await q('set local role authenticated'); await q('update player_points set points=999 where player_id=$1', [P[1]]) } catch (e) { blocked = /permission denied/.test(e.message) }
     await q('rollback to savepoint z'); rec('browsers cannot edit points', blocked)
 
+    // starting points: reset the draft to zero, then only new points count
+    r = await call(U[0], 'select public.set_draft_points_baseline($1)', [D], 'authenticated')
+    rec('a player cannot reset the scores', /permission denied/.test(r.err || ''), r.err)
+    r = await call(null, 'select public.set_draft_points_baseline($1)', [D])
+    rec('the baseline is saved', !r.err && r.v === 3, r.err || String(r.v))
+    r = await call(U[0], 'select public.draft_leaderboard($1)', [D])
+    rec('after the reset every team is on zero', r.v.rows.every((x) => Number(x.points) === 0 && x.players.every((p) => Number(p.points) === 0)), JSON.stringify(r.v.rows.map((x) => x.points)))
+    const today = (await q('select count(*)::int n from draft_standings_daily where draft_id=$1 and day=public._points_day() and points=0', [D])).rows[0].n
+    rec("today's snapshot is redone at zero", today === 3, String(today))
+    await call(null, 'select public.sync_player_points($1,$2::jsonb)', [pool, rows([40, 30, 30, 7, 0, 0])]) // A +10, C +7
+    r = await call(U[0], 'select public.draft_leaderboard($1)', [D])
+    const after = Object.fromEntries(r.v.rows.map((x) => [x.username, Number(x.points)]))
+    rec('only points scored after the reset count', after.m0 === 10 && after.m2 === 7 && after.m1 === 0, JSON.stringify(after))
+
     const src = (await q(`select url from fantasy_sources where pool='ILT20_2026'`)).rows[0]
     rec('ILT20 points source is configured', /statz\.ai/.test(src?.url || ''), src?.url)
   } catch (e) {

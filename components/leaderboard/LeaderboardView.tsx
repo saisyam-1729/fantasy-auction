@@ -79,14 +79,17 @@ export default function LeaderboardView({ draftId, currentUserId }: { draftId: s
         {board.rows.map((row) => {
           const mine = row.user_id === currentUserId
           const expanded = open === row.member_id
-          const podium = PODIUM[row.rank]
+          // medals only once a team has scored, so an all-zero board has no winners
+          const scored = Number(row.points) > 0
+          const podium = scored ? PODIUM[row.rank] : undefined
+          const medal = scored ? MEDALS[row.rank] : undefined
           return (
             <li key={row.member_id} className={`rounded-2xl border-2 ${podium ?? (mine ? 'border-emerald-400/60 bg-emerald-500/10' : 'border-slate-700 bg-slate-900/40')}`}>
               <button type="button" onClick={() => setOpen(expanded ? null : row.member_id)} aria-expanded={expanded} className="w-full flex items-center gap-3 px-3 py-3 text-left">
                 <span className="w-10 shrink-0 text-center">
-                  {MEDALS[row.rank] ? (
+                  {medal ? (
                     <span className="text-2xl" role="img" aria-label={`Rank ${row.rank}`}>
-                      {MEDALS[row.rank]}
+                      {medal}
                     </span>
                   ) : (
                     <span className="text-lg font-bold text-slate-300">{row.rank}</span>
@@ -96,14 +99,14 @@ export default function LeaderboardView({ draftId, currentUserId }: { draftId: s
                   <Move row={row} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className={`block truncate font-semibold ${row.rank <= 3 ? 'text-white text-base' : 'text-slate-100 text-sm'}`}>
+                  <span className={`block truncate font-semibold ${podium ? 'text-white text-base' : 'text-slate-100 text-sm'}`}>
                     {row.username}
                     {mine && <span className="ml-2 text-[10px] font-bold uppercase text-emerald-300">You</span>}
                   </span>
                   <span className="block text-[11px] text-slate-400">{row.players.length} players · tap for details</span>
                 </span>
                 <span className="shrink-0 text-right">
-                  <span className={`block font-black ${row.rank <= 3 ? 'text-xl text-white' : 'text-lg text-slate-100'}`}>{formatPoints(Number(row.points))}</span>
+                  <span className={`block font-black ${podium ? 'text-xl text-white' : 'text-lg text-slate-100'}`}>{formatPoints(Number(row.points))}</span>
                   <Gain value={pointsGain(row)} />
                 </span>
               </button>
@@ -128,7 +131,7 @@ export default function LeaderboardView({ draftId, currentUserId }: { draftId: s
         })}
       </ol>
       <p className="mt-4 text-[11px] text-slate-500">
-        Points are each player’s season performance points from Statz, added up for every team. Ties share a rank.
+        Points are each player’s Statz performance points scored after the draft, added up for every team. Ties share a rank.
       </p>
     </div>
   )

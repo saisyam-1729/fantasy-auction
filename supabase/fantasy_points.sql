@@ -10,6 +10,10 @@
 --
 -- Only the job (service_role) writes. Members read their own draft's board
 -- through draft_leaderboard.
+--
+-- Starting points: points a player already had when a draft began don't count
+-- for that draft. draft_point_offsets holds them per draft and player, and every
+-- score below is (season total - offset). set_draft_points_baseline fills it.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.fantasy_sources (
@@ -42,6 +46,13 @@ CREATE TABLE IF NOT EXISTS public.draft_standings_daily (
   PRIMARY KEY (draft_id, member_id, day)
 );
 
+CREATE TABLE IF NOT EXISTS public.draft_point_offsets (
+  draft_id uuid NOT NULL REFERENCES public.draft_rooms(id) ON DELETE CASCADE,
+  player_id bigint NOT NULL REFERENCES public.draft_pool_players(id) ON DELETE CASCADE,
+  points numeric NOT NULL,
+  PRIMARY KEY (draft_id, player_id)
+);
+
 CREATE TABLE IF NOT EXISTS public.points_sync_log (
   id bigserial PRIMARY KEY,
   pool text NOT NULL,
@@ -60,6 +71,7 @@ ALTER TABLE public.player_points ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.player_points_daily ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.draft_standings_daily ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.points_sync_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.draft_point_offsets ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS fantasy_sources_read ON public.fantasy_sources;
 CREATE POLICY fantasy_sources_read ON public.fantasy_sources FOR SELECT TO authenticated USING (true);
@@ -68,9 +80,13 @@ CREATE POLICY player_points_read ON public.player_points FOR SELECT TO authentic
 DROP POLICY IF EXISTS draft_standings_read ON public.draft_standings_daily;
 CREATE POLICY draft_standings_read ON public.draft_standings_daily
   FOR SELECT TO authenticated USING (public._is_draft_member(draft_id));
+DROP POLICY IF EXISTS draft_point_offsets_read ON public.draft_point_offsets;
+CREATE POLICY draft_point_offsets_read ON public.draft_point_offsets
+  FOR SELECT TO authenticated USING (public._is_draft_member(draft_id));
 
 REVOKE ALL ON public.fantasy_sources, public.player_points, public.player_points_daily,
-  public.draft_standings_daily, public.points_sync_log FROM anon, authenticated;
+  public.draft_standings_daily, public.points_sync_log, public.draft_point_offsets FROM anon, authenticated;
+GRANT SELECT ON public.draft_point_offsets TO authenticated;
 GRANT SELECT ON public.fantasy_sources, public.player_points, public.draft_standings_daily TO authenticated;
 
 INSERT INTO public.fantasy_sources (pool, url, label) VALUES
@@ -96,10 +112,11 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   WITH totals AS (
-    SELECT m.id AS member_id, COALESCE(SUM(pp.points), 0) AS points
+    SELECT m.id AS member_id, COALESCE(SUM(COALESCE(pp.points, 0) - COALESCE(o.points, 0)), 0) AS points
     FROM public.draft_members m
     LEFT JOIN public.draft_picks pk ON pk.member_id = m.id
     LEFT JOIN public.player_points pp ON pp.player_id = pk.player_id
+    LEFT JOIN public.draft_point_offsets o ON o.draft_id = p_draft_id AND o.player_id = pk.player_id
     WHERE m.draft_id = p_draft_id
     GROUP BY m.id
   )
@@ -224,13 +241,14 @@ BEGIN
           'name', dp.player_name,
           'team', dp.team,
           'role', dp.role,
-          'points', COALESCE(pp.points, 0),
+          'points', COALESCE(pp.points, 0) - COALESCE(o.points, 0),
           'matches', COALESCE(pp.matches, 0),
-          'prev_points', ppd.points
-        ) ORDER BY COALESCE(pp.points, 0) DESC, dp.player_name), '[]'::jsonb)
+          'prev_points', ppd.points - COALESCE(o.points, 0)
+        ) ORDER BY COALESCE(pp.points, 0) - COALESCE(o.points, 0) DESC, dp.player_name), '[]'::jsonb)
         FROM public.draft_picks pk
         JOIN public.draft_pool_players dp ON dp.id = pk.player_id
         LEFT JOIN public.player_points pp ON pp.player_id = dp.id
+        LEFT JOIN public.draft_point_offsets o ON o.draft_id = p_draft_id AND o.player_id = dp.id
         LEFT JOIN public.player_points_daily ppd ON ppd.player_id = dp.id AND ppd.day = v_prev
         WHERE pk.member_id = m.id
       )
@@ -247,3 +265,40 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.draft_leaderboard(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.draft_leaderboard(uuid) TO authenticated;
+
+-- Reset a draft to zero from now on: every player's current season total becomes
+-- their starting points for this draft, and today's standings snapshot is redone
+-- so tomorrow's day-on-day change is measured from zero. Service role only
+-- (run with scripts/set-draft-baseline.cjs).
+CREATE OR REPLACE FUNCTION public.set_draft_points_baseline(p_draft_id uuid)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_pool text;
+  n integer;
+BEGIN
+  SELECT pool INTO v_pool FROM public.draft_rooms WHERE id = p_draft_id;
+  IF v_pool IS NULL THEN
+    RAISE EXCEPTION 'Draft not found';
+  END IF;
+
+  DELETE FROM public.draft_point_offsets WHERE draft_id = p_draft_id;
+  INSERT INTO public.draft_point_offsets (draft_id, player_id, points)
+  SELECT p_draft_id, pp.player_id, pp.points
+  FROM public.player_points pp
+  WHERE pp.pool = v_pool AND pp.points <> 0;
+  GET DIAGNOSTICS n = ROW_COUNT;
+
+  DELETE FROM public.draft_standings_daily WHERE draft_id = p_draft_id AND day = public._points_day();
+  IF EXISTS (SELECT 1 FROM public.points_sync_log WHERE pool = v_pool AND day = public._points_day()) THEN
+    INSERT INTO public.draft_standings_daily (draft_id, member_id, day, points, rank)
+    SELECT p_draft_id, s.member_id, public._points_day(), s.points, s.rank FROM public._draft_current_standings(p_draft_id) s;
+  END IF;
+  RETURN n;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.set_draft_points_baseline(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.set_draft_points_baseline(uuid) TO service_role;
