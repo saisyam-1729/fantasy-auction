@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { poolLabel } from '@/lib/events'
 import type { DraftStatus } from '@/lib/draft'
+import { PageHeader } from '@/components/ui'
 
 type MyEvent = { id: string; room_code: string; name: string; pool: string; status: DraftStatus; started_at: string | null }
 
-const card = 'backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl shadow-2xl p-5 sm:p-6'
 
 /** The Leaderboard tab: sub-tabs (Events for now) listing the events you took part in. */
 export default function LeaderboardHome() {
@@ -32,8 +32,9 @@ export default function LeaderboardHome() {
   }, [supabase])
 
   return (
-    <div className={card}>
-      <div role="tablist" className="mb-5 inline-flex rounded-xl bg-slate-900/50 p-1">
+    <div className="mx-auto max-w-6xl">
+      <PageHeader title="🏆 Leaderboards" subtitle="Fantasy standings for the events you drafted in. Points update every night." />
+      <div role="tablist" className="mb-4 inline-flex rounded-xl bg-white/10 p-1">
         <button type="button" role="tab" aria-selected className="px-4 py-1.5 rounded-lg bg-sky-500 text-slate-900 text-sm font-semibold">
           Events
         </button>
@@ -44,7 +45,7 @@ export default function LeaderboardHome() {
       ) : events.length === 0 ? (
         <p className="text-slate-300 text-sm">You haven’t taken part in an event draft yet. Leaderboards appear here once a draft starts.</p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {events.map((e) => (
             <li key={e.id}>
               <button
