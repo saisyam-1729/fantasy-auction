@@ -42,21 +42,30 @@ Money is in rupees (1 L = 100,000, 1 Cr = 10,000,000). Rules live in `lib/` and 
 - **Room settings**: when creating a room the host can set the starting budget (default ₹100 Cr), the lot timer (10–120 s, default 30) and the bid steps (two thresholds and three steps, default 10 / 20 / 25 L under ₹2 Cr and ₹5 Cr). They are stored on the room (`budget`, `bid_timer_seconds`, `slab_config`), enforced by the database, and apply to bidding, the countdown, auto-sell and the "going once" call. Settings are fixed once a room is created.
 - **Events tab**: the dashboard has two tabs, IPL Auction and Events. Events lists tournaments with their own player lists (`lib/events.ts`): **ILT20 2026** (142 players, 6 franchises) can be played as an auction or a draft, chosen when creating the room; **SMAT 2026** is draft only. An ILT20 auction is a normal auction room on `player_inventory.inventory_type = 'ILT20_2026'`, with the sheet's own ₹ base prices (50 L / 1 Cr / 2 Cr; not official) and all the usual rules. Players whose role the sheet marks Unknown are stored as `UNK`. To refresh ILT20, run `node scripts/import-ilt20-2026.cjs <ILT20_2026_Squads_Roles_BasePrice.xlsx>` and `npm run db:apply`.
 - **Drafts** (`/draft/[id]`, from an event on the Events tab): no money, no bidding. 3 to 10 teams join with a room ID and key. The host spins a wheel; each spin gives the next pick position to a random team still on the wheel, and the last team left takes the last position. Picks then snake (1, 2, 3 … 3, 2, 1 …) from one shared pool of 544 Syed Mushtaq Ali Trophy players until every team has its picks (1–30, default 15). Only the team on the clock may pick; the host can pick for an absent team and undo the last pick. Rules are in `lib/draft.ts` and enforced by `supabase/draft.sql`. To refresh the pool when squads change, run `node scripts/import-smat2026.cjs <SMAT_2026_27_Players.xlsx>` and then `npm run db:apply`.
+- **Drafts, extras**: members keep a private wishlist (☆ in the pool, ordered under “My list”). A room can set a pick timer (15–600 s); when a turn runs out the database picks for that team: the top available wishlist player, else the most points. Optional turn chime, the screen stays awake while drafting, and the pool shows each player's points. Hosts get tools to fix a pick, add a missing player and reset points (`supabase/draft_admin.sql`).
+- **Invite links**: `/join#code=…&key=…` joins a draft or auction room in one tap; the code and key sit in the URL fragment, which is never sent to the server.
 - **Fantasy leaderboard** (dashboard → Leaderboard → Events, and `/leaderboard/[id]`): every night at 2:00 am IST a Vercel Cron job (`vercel.json`, `app/api/cron/sync-points`) reads each event's points page (ILT20: Statz performance points, configured in the `fantasy_sources` table), matches players to the draft pool by name and team, and stores season totals plus a daily snapshot of each player and of every draft's standings. A team's score is the sum of its players' points. The board shows 🥇🥈🥉 for the top three, ▲/▼ places moved and points gained since the previous day; tap a team for its players. Points a player already had when a draft began can be excluded with `node scripts/set-draft-baseline.cjs <room code> --apply` (stored in `draft_point_offsets`; used for ILT202026_405, whose first match was played during the draft). Players the job could not match are logged in `points_sync_log` (add a spelling to `NAME_ALIASES` in `lib/fantasyPoints.ts`). Needs `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET` on Vercel. Run it by hand with `node scripts/sync-points.cjs` (`--dry` to only print matches). On the Hobby plan Vercel only guarantees the hour (20:00–20:59 UTC, i.e. 1:30–2:30 am IST); either way the snapshot counts for the new day.
 - **Insights tab**: five fixed charts (purse vs slots, roles, spend concentration, premium, timeline) and a rule-based strategy label, computed in `lib/insights.ts`.
 
 ## Code map
 
 ```
-app/auth, app/dashboard, app/room/[id]   pages (room page holds state, realtime, bidding)
-components/room/*                        My Squad, Leaderboard, Players, Squad boards
-components/InsightsPanel.tsx             Insights charts
-lib/bidSlabs.ts  lib/purse.ts            rules
-lib/insights.ts  lib/squadBoards.ts      derived numbers (pure, tested)
-lib/roomTypes.ts lib/money.ts            shared types and formatting
-supabase/*.sql                           database functions, policies (see docs/DATABASE.md)
+app/(app)/layout.tsx                     app shell for signed-in pages (session check, top bar, page width)
+app/(app)/dashboard                      Home: your rooms, your standings, events
+app/(app)/events, join, leaderboard      Events (IPL, ILT20, SMAT), join any room / invite links, leaderboards
+app/(app)/room/[id], draft/[id]          auction room, draft room
+app/dev/*-preview                        development-only previews of the draft room and leaderboard with sample data
+components/ui                            shared Card, Button, Segmented tabs, Badge, PageHeader
+components/draft, leaderboard, room      screens; DraftRoomView and LeaderboardBoard draw from props only
+hooks/                                   useRoomSync (auction live sync), useWakeLock, useTurnSound, useSecondsLeft, …
+lib/                                     rules and pure helpers (tested): bidSlabs, purse, draft, events, fantasyPoints, invite, …
+supabase/*.sql                           database functions and policies (see docs/DATABASE.md)
 tests/                                   Vitest
 ```
+
+## Screens and sizes
+
+Signed-in pages share one shell and grow with the screen (up to 1600px). The draft room shows one panel at a time on phones, the pool beside the teams on laptops, and pool, teams and the live pick feed on wide screens. Check layouts without signing in at `/dev/draft-preview?state=lobby|drafting|done` and `/dev/leaderboard-preview` (development only).
 
 ## Security model
 

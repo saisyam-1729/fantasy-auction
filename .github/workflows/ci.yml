@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   check:
@@ -19,3 +20,26 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  # Database rule tests (scripts/db-tests). Each runs in one transaction that is
+  # always rolled back. Runs only on main (never on pull requests, which could
+  # come from forks) and only once the SUPABASE_DB_URL repository secret exists:
+  # GitHub -> Settings -> Secrets and variables -> Actions. Prefer a staging DB.
+  db-tests:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Skip (no SUPABASE_DB_URL secret)
+        if: env.SUPABASE_DB_URL == ''
+        run: echo "Add the SUPABASE_DB_URL repository secret to run the database tests."
+      - name: Database rule tests
+        if: env.SUPABASE_DB_URL != ''
+        run: npm run db:test

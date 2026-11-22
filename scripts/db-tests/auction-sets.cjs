@@ -5,7 +5,7 @@
  * Run all with: npm run db:test
  */
 const fs = require('fs'), { Client } = require('pg'), crypto = require('crypto')
-const env = fs.readFileSync(require('path').join(__dirname, '..', '..', '.env.local'), 'utf8').match(/^SUPABASE_DB_URL=(.*)$/m)[1].trim().replace(/^["']|["']$/g, '')
+const env = require('../dbUrl.cjs')()
 const CR = 1e7, L = 1e5, u = () => crypto.randomUUID()
 const results = []
 const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL ') + n + (d ? ' - ' + d : '')) }
