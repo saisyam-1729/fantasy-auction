@@ -35,14 +35,14 @@ export default function DraftPreview({ state, me }: { state: 'lobby' | 'drafting
       members={state === 'lobby' ? members.map((m, i) => (i < 3 ? m : { ...m, order_pos: null })) : members}
       picks={picks}
       pool={fixture.pool as DraftPoolPlayer[]}
-      userId={'u' + me}
+      userId={"u" + me}
       busy={false}
       notice={null}
       wishlist={{ ids: wish, toggle: (id) => setWish(wish.includes(id) ? wish.filter((x) => x !== id) : [...wish, id]), move: (id, dir) => setWish(moveInList(wish, id, dir)) }}
       points={points}
       secondsLeft={state === 'drafting' ? 42 : null}
       sound={{ enabled: false, toggle: noop }}
-      actions={{ spin: noop, start: noop, resetOrder: noop, removeMember: noop, pick: noop, undo: noop, deleteDraft: noop, copyInvite: noop, copyTeams: noop }}
+      actions={{ spin: noop, start: noop, resetOrder: noop, removeMember: noop, pick: noop, undo: noop, deleteDraft: noop, copyInvite: noop, copyTeams: noop, replacePick: noop, addPlayer: noop, resetPoints: noop }}
     />
   )
 }

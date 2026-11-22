@@ -64,20 +64,29 @@ export default function DraftRoomPage() {
     return r.data as DraftRoom
   }, [supabase, id])
 
-  // First load: the room, then its pool (once; the pool does not change during a draft).
+  const loadPool = useCallback(
+    async (poolKey: string) => {
+      const { data: players } = await supabase
+        .from('draft_pool_players')
+        .select('id, sort_no, team, player_name, role, captain, notes')
+        .eq('pool', poolKey)
+        .order('sort_no')
+        .limit(2000)
+      setPool((players ?? []) as DraftPoolPlayer[])
+    },
+    [supabase]
+  )
+  const loadPoints = useCallback(async () => {
+    const { data } = await supabase.rpc('draft_pool_points', { p_draft_id: id })
+    setPoints(new Map(((data ?? []) as { player_id: number; points: number }[]).map((p) => [Number(p.player_id), Number(p.points)])))
+  }, [supabase, id])
+
+  // First load: the room, then its pool (once; it only changes when a host adds a player).
   useEffect(() => {
     let live = true
     void (async () => {
       const r = await refresh()
-      if (r?.pool) {
-        const { data: players } = await supabase
-          .from('draft_pool_players')
-          .select('id, sort_no, team, player_name, role, captain, notes')
-          .eq('pool', r.pool)
-          .order('sort_no')
-          .limit(2000)
-        if (live) setPool((players ?? []) as DraftPoolPlayer[])
-      }
+      if (r?.pool && live) await loadPool(r.pool)
       // my wishlist (private by RLS) and the pool's fantasy points for this draft
       const [wl, pts] = await Promise.all([
         supabase.from('draft_wishlist').select('player_id, rank, draft_members!inner(draft_id)').eq('draft_members.draft_id', id).order('rank'),
@@ -91,7 +100,7 @@ export default function DraftRoomPage() {
     return () => {
       live = false
     }
-  }, [supabase, refresh, id])
+  }, [supabase, refresh, id, loadPool])
 
   // Live updates. Polling runs fast only while the live channel is down.
   const channelUp = useRef(false)
@@ -252,6 +261,13 @@ export default function DraftRoomPage() {
           }),
         copyInvite: () => void copy(inviteText(window.location.origin, `${poolLabel(room.pool)} draft`, room.room_code, room.room_key), 'Invite'),
         copyTeams: () => void copy(draftSummaryText(room.name, members, picks, playersById), 'Teams'),
+        replacePick: (pickNo, playerId) =>
+          void call('draft_host_replace_pick', { p_draft_id: id, p_pick_no: pickNo, p_player_id: playerId }, `Pick #${pickNo + 1} changed`),
+        addPlayer: (team, name, role) =>
+          void call('draft_host_add_player', { p_draft_id: id, p_team: team, p_name: name, p_role: role }, `${name} added to the pool`).then((ok) => {
+            if (ok) void loadPool(room.pool)
+          }),
+        resetPoints: () => void call('draft_host_reset_points', { p_draft_id: id }, 'Points reset: only points from now on count').then(() => void loadPoints()),
       }}
     />
   )

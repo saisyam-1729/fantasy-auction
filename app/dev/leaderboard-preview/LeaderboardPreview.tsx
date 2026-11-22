@@ -38,5 +38,6 @@ export default function LeaderboardPreview({ zero }: { zero: boolean }) {
   }
   rows.sort((a, b) => a.rank - b.rank)
   const board: Leaderboard = { synced_at: '2026-11-23T20:35:00Z', latest_day: '2026-11-24', previous_day: zero ? null : '2026-11-23', rows }
-  return mounted ? <LeaderboardBoard board={board} currentUserId="u4" /> : null
+  const sync = { ran_at: '2026-11-21T20:35:00Z', source_rows: 30, matched: 29, unmatched: [{ name: 'Mystery Man' }] }
+  return mounted ? <LeaderboardBoard board={board} currentUserId="u4" sync={sync} now={Date.parse('2026-11-23T10:00:00Z')} /> : null
 }

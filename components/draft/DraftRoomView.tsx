@@ -5,6 +5,7 @@ import Link from 'next/link'
 import DraftWheel from '@/components/draft/DraftWheel'
 import DraftPool, { type WishlistProps } from '@/components/draft/DraftPool'
 import LatestPick from '@/components/draft/LatestPick'
+import HostTools from '@/components/draft/HostTools'
 import { Badge, Button, Card, PageHeader, Segmented, cx } from '@/components/ui'
 import { poolLabel } from '@/lib/events'
 import {
@@ -31,6 +32,9 @@ export type DraftActions = {
   deleteDraft: () => void
   copyInvite: () => void
   copyTeams: () => void
+  replacePick: (pickNo: number, playerId: number) => void
+  addPlayer: (team: string, name: string, role: string | null) => void
+  resetPoints: () => void
 }
 
 export type DraftRoomViewProps = {
@@ -65,7 +69,6 @@ type Tab = 'pool' | 'teams' | 'log'
 export default function DraftRoomView({ room, members, picks, pool, userId, busy, notice, actions, wishlist, points, secondsLeft = null, sound }: DraftRoomViewProps) {
   const [tab, setTab] = useState<Tab>('pool')
   const [rightTab, setRightTab] = useState<'teams' | 'log'>('teams')
-  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const ordered = useMemo(() => inDraftOrder(members), [members])
   const me = members.find((m) => m.user_id === userId) ?? null
@@ -155,32 +158,21 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
   )
 
   const hostTools = isHost && (
-    <details className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
-      <summary className="cursor-pointer select-none font-semibold text-slate-300">Host tools</summary>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {room.status !== 'LOBBY' && picks.length > 0 && (
-          <Button size="sm" disabled={busy} onClick={actions.undo}>
-            Undo last pick
-          </Button>
-        )}
-        {isOwner &&
-          (confirmDelete ? (
-            <>
-              <Button size="sm" tone="danger" disabled={busy} onClick={actions.deleteDraft}>
-                Delete for everyone
-              </Button>
-              <Button size="sm" onClick={() => setConfirmDelete(false)}>
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" tone="danger" onClick={() => setConfirmDelete(true)}>
-              Delete draft
-            </Button>
-          ))}
-      </div>
-      {room.status === 'DRAFTING' && <p className="mt-2 text-xs text-slate-400">To pick for a team that is away, use “Pick for …” in the pool.</p>}
-    </details>
+    <HostTools
+      room={room}
+      isOwner={isOwner}
+      picks={picks}
+      pool={pool}
+      members={members}
+      busy={busy}
+      actions={{
+        undo: actions.undo,
+        deleteDraft: actions.deleteDraft,
+        replacePick: actions.replacePick,
+        addPlayer: actions.addPlayer,
+        resetPoints: actions.resetPoints,
+      }}
+    />
   )
 
   // ------------------------------------------------------------------ lobby

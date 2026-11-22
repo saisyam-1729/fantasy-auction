@@ -61,8 +61,26 @@ function Players({ row }: { row: LeaderboardRow }) {
  * A draft's leaderboard drawn from data (no fetching). Phones: tap a team to
  * expand its players. Laptops: the selected team's players show in a side panel.
  */
-export function LeaderboardBoard({ board, currentUserId }: { board: Leaderboard; currentUserId: string | null }) {
+export type SyncStatus = { ran_at: string; source_rows: number; matched: number; unmatched: { name: string; team?: string }[] }
+
+/** Older than this, the nightly update probably didn't run. */
+const STALE_MS = 30 * 60 * 60 * 1000
+
+export function LeaderboardBoard({
+  board,
+  currentUserId,
+  sync = null,
+  now = null,
+}: {
+  board: Leaderboard
+  currentUserId: string | null
+  sync?: SyncStatus | null
+  /** Current time (ms) for the staleness check; omit to skip it. */
+  now?: number | null
+}) {
   const [open, setOpen] = useState<string | null>(null)
+  const stale = Boolean(sync && now != null && now - new Date(sync.ran_at).getTime() > STALE_MS)
+  const unmatched = sync?.unmatched ?? []
   const mine = board.rows.find((r) => r.user_id === currentUserId)
   const detail = board.rows.find((r) => r.member_id === open) ?? mine ?? board.rows[0]
 
@@ -79,6 +97,17 @@ export function LeaderboardBoard({ board, currentUserId }: { board: Leaderboard;
             'No points yet. They update every night at about 2:00 am.'
           )}
         </div>
+        {(stale || unmatched.length > 0) && (
+          <div className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            {stale && <p>⚠ The last points update was more than a day ago, so tonight’s update may have failed. Points may be behind.</p>}
+            {unmatched.length > 0 && (
+              <p>
+                ⚠ {unmatched.length} player{unmatched.length === 1 ? '' : 's'} on the points page couldn’t be matched to the pool, so their points aren’t
+                counted: {unmatched.map((u) => u.name).join(', ')}. A host can add a missing player from the draft room’s host tools.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="mb-1 hidden sm:grid grid-cols-[2.5rem_2.25rem_minmax(0,1fr)_5rem] gap-3 px-3 text-[11px] uppercase tracking-wide text-slate-500">
           <span className="text-center">Rank</span>
@@ -173,10 +202,12 @@ export function LeaderboardBoard({ board, currentUserId }: { board: Leaderboard;
   )
 }
 
-/** Loads one draft's leaderboard and draws it. */
-export default function LeaderboardView({ draftId, currentUserId }: { draftId: string; currentUserId: string | null }) {
+/** Loads one draft's leaderboard (and, given its pool, the last points update) and draws it. */
+export default function LeaderboardView({ draftId, currentUserId, pool }: { draftId: string; currentUserId: string | null; pool?: string }) {
   const [supabase] = useState(() => createClient())
   const [board, setBoard] = useState<Leaderboard | null>(null)
+  const [sync, setSync] = useState<SyncStatus | null>(null)
+  const [now, setNow] = useState<number | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -185,13 +216,25 @@ export default function LeaderboardView({ draftId, currentUserId }: { draftId: s
       if (!live) return
       if (err) setError(err.message)
       else setBoard(data as Leaderboard)
+      setNow(Date.now())
     })
     return () => {
       live = false
     }
   }, [supabase, draftId])
 
+  useEffect(() => {
+    if (!pool) return
+    let live = true
+    void supabase.rpc('points_sync_status', { p_pool: pool }).then(({ data }) => {
+      if (live) setSync((data as SyncStatus | null) ?? null)
+    })
+    return () => {
+      live = false
+    }
+  }, [supabase, pool])
+
   if (error) return <p className="text-red-200 text-sm">{error}</p>
   if (!board) return <p className="text-slate-300 text-sm">Loading leaderboard…</p>
-  return <LeaderboardBoard board={board} currentUserId={currentUserId} />
+  return <LeaderboardBoard board={board} currentUserId={currentUserId} sync={sync} now={now} />
 }

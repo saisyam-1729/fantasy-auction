@@ -47,7 +47,7 @@ export default function DraftLeaderboardPage() {
           </Link>
         }
       />
-      <LeaderboardView draftId={id} currentUserId={user.id} />
+      <LeaderboardView draftId={id} currentUserId={user.id} pool={room?.pool} />
     </div>
   )
 }
