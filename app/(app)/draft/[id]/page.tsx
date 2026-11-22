@@ -8,6 +8,7 @@ import DraftWheel from '@/components/draft/DraftWheel'
 import DraftPool from '@/components/draft/DraftPool'
 import LatestPick from '@/components/draft/LatestPick'
 import { poolLabel } from '@/lib/events'
+import { inviteText } from '@/lib/invite'
 import {
   draftSummaryText,
   inDraftOrder,
@@ -238,7 +239,7 @@ export default function DraftRoomPage() {
             </span>
             <button
               type="button"
-              onClick={() => void copy(`Join my ${poolLabel(room.pool)} draft\nRoom ID: ${room.room_code}\nRoom Key: ${room.room_key}`, 'Invite')}
+              onClick={() => void copy(inviteText(window.location.origin, `${poolLabel(room.pool)} draft`, room.room_code, room.room_key), 'Invite')}
               className="px-2 py-1 rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20"
             >
               Copy invite

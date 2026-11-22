@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_PICKS_PER_TEAM, DRAFT_MAX_TEAMS, DRAFT_MIN_TEAMS, type DraftStatus } from '@/lib/draft'
 import type { CricketEvent } from '@/lib/events'
+import { inviteText } from '@/lib/invite'
 
 type MyDraft = { id: string; room_code: string; name: string; status: DraftStatus; created_at: string }
 type OpenDraft = { id: string; room_code: string; name: string; pool: string; member_count: number; max_members: number }
@@ -18,7 +19,7 @@ const card = 'backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl sh
 const STATUS_LABEL: Record<DraftStatus, string> = { LOBBY: 'In lobby', DRAFTING: 'Drafting', DONE: 'Finished' }
 
 /** An event's draft format: your drafts, create a draft, join a draft. */
-export default function DraftHome({ event }: { event: CricketEvent }) {
+export default function DraftHome({ event }: { event: CricketEvent & { pool: string } }) {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const [view, setView] = useState<'menu' | 'create' | 'join'>('menu')
@@ -150,10 +151,10 @@ export default function DraftHome({ event }: { event: CricketEvent }) {
         ))}
         <button
           type="button"
-          onClick={() => void copy(`Join my ${event.name} draft\nRoom ID: ${created.code}\nRoom Key: ${created.key}`, 'Invite')}
+          onClick={() => void copy(inviteText(window.location.origin, `${event.name} draft`, created.code, created.key), 'Invite')}
           className="w-full mb-4 py-3 rounded-xl border-2 border-emerald-500/60 text-emerald-200 font-semibold hover:bg-emerald-500/10 transition"
         >
-          Copy invite (ID + key)
+          Copy invite link
         </button>
         {toast && <p className="text-center text-green-300 text-sm mb-3">{toast}</p>}
         <button type="button" onClick={() => router.push(`/draft/${created.id}`)} className={primary}>

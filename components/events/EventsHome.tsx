@@ -9,26 +9,36 @@ import { EVENTS, eventById, type EventFormat } from '@/lib/events'
 const card = 'backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl shadow-2xl p-6 sm:p-8'
 const FORMAT_LABEL: Record<EventFormat, string> = { auction: 'Auction', draft: 'Draft' }
 
+/** Event chosen in the address (/events?e=ilt20-2026), so Home can link straight to one. */
+function eventFromUrl(): string | null {
+  try {
+    return eventById(new URLSearchParams(window.location.search).get('e'))?.id ?? null
+  } catch {
+    return null
+  }
+}
+
 /**
- * The Events tab: a list of events (ILT20, SMAT, …). Opening one shows its
+ * The Events page: a list of events (IPL, ILT20, SMAT, …). Opening one shows its
  * formats; an event with both lets the host choose Auction or Draft.
  */
 export default function EventsHome() {
-  const [eventId, setEventId] = useState<string | null>(null)
-  const [format, setFormat] = useState<EventFormat>('draft')
+  const [eventId, setEventId] = useState<string | null>(eventFromUrl)
+  const [format, setFormat] = useState<EventFormat>(() => eventById(eventFromUrl())?.formats[0] ?? 'draft')
   const [auctionView, setAuctionView] = useState<'menu' | 'create' | 'join'>('menu')
   const event = eventById(eventId)
 
-  function open(id: string) {
+  function open(id: string | null) {
     const e = eventById(id)
     setEventId(id)
     setFormat(e?.formats[0] ?? 'draft')
     setAuctionView('menu')
+    window.history.replaceState(null, '', id ? `/events?e=${id}` : '/events')
   }
 
   if (!event) {
     return (
-      <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {EVENTS.map((e) => (
           <button
             key={e.id}
@@ -65,9 +75,9 @@ export default function EventsHome() {
   const both = event.formats.length > 1
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <button type="button" onClick={() => setEventId(null)} className="text-slate-300 hover:text-white text-sm">
+        <button type="button" onClick={() => open(null)} className="text-slate-300 hover:text-white text-sm">
           ← All events
         </button>
         <span className="text-sm font-semibold text-white">{event.name}</span>
@@ -101,7 +111,7 @@ export default function EventsHome() {
         </div>
       )}
 
-      {format === 'draft' && <DraftHome key={event.id} event={event} />}
+      {format === 'draft' && event.pool && <DraftHome key={event.id} event={{ ...event, pool: event.pool }} />}
 
       {format === 'auction' && event.inventoryType && (
         <>

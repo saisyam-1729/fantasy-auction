@@ -4,6 +4,16 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
+/** Where to go after signing in: the page that sent the user here (same site only), else Home. */
+function nextPath(): string {
+  try {
+    const n = new URLSearchParams(window.location.search).get('next') ?? ''
+    return n.startsWith('/') && !n.startsWith('//') ? n : '/dashboard'
+  } catch {
+    return '/dashboard'
+  }
+}
+
 export default function AuthPage() {
   const [isSignup, setIsSignup] = useState(false)
   const [showResetPassword, setShowResetPassword] = useState(false)
@@ -35,7 +45,7 @@ export default function AuthPage() {
     } else {
       setMessage('Login successful!')
       setMessageType('success')
-      router.push('/dashboard')
+      router.push(nextPath())
     }
   }
 
@@ -69,7 +79,7 @@ export default function AuthPage() {
       setMessage('Account created! Logging you in...')
       setMessageType('success')
       setTimeout(() => {
-        router.push('/dashboard')
+        router.push(nextPath())
       }, 1000)
     }
   }

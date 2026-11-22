@@ -5,35 +5,29 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_MIN_SQUAD, DEFAULT_MAX_SQUAD } from '@/lib/purse'
 import { DEFAULT_FORM, parseSettingsForm, type SettingsForm } from '@/lib/roomSettings'
-
-const INVENTORY_OPTIONS = [
-  { value: 'IPL', label: 'IPL (Domestic)' },
-  { value: 'T20_WC', label: 'T20 World Cup (International)' },
-  { value: 'ODI_WC', label: 'ODI World Cup (International)' },
-]
+import { inviteText } from '@/lib/invite'
 
 const field =
   'w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition'
 const small = 'w-full px-3 py-2 bg-slate-800/50 border border-slate-600 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500'
 
 /**
- * The "create auction room" form and the room-created screen. Used by the IPL
- * Auction tab (player list chosen here) and by events (player list fixed).
+ * The "create auction room" form and the room-created screen, for one event's
+ * player list.
  */
 export default function CreateAuctionRoom({
-  inventoryType: fixedInventory,
+  inventoryType,
   eventName,
   onBack,
 }: {
-  /** When set, the room uses this player list and the picker is hidden. */
-  inventoryType?: string
+  /** The event's player list (player_inventory.inventory_type). */
+  inventoryType: string
   eventName?: string
   onBack: () => void
 }) {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
   const [roomName, setRoomName] = useState('')
-  const [inventoryType, setInventoryType] = useState(fixedInventory ?? 'IPL')
   const [minSquadSize, setMinSquadSize] = useState(String(DEFAULT_MIN_SQUAD))
   const [maxSquadSize, setMaxSquadSize] = useState(String(DEFAULT_MAX_SQUAD))
   const [autoHammer, setAutoHammer] = useState(false)
@@ -181,11 +175,11 @@ export default function CreateAuctionRoom({
         <button
           type="button"
           onClick={() =>
-            void copyText(`Join my ${eventName ? eventName + ' ' : ''}auction room\nRoom ID: ${created.roomId}\nRoom Key: ${created.roomKey}`, 'Invite')
+            void copyText(inviteText(window.location.origin, `${eventName ? eventName + ' ' : ''}auction room`, created.roomId, created.roomKey), 'Invite')
           }
           className="w-full mb-6 py-3 rounded-xl border-2 border-yellow-500/60 text-yellow-200 font-semibold hover:bg-yellow-500/10 transition"
         >
-          Copy invite (ID + key)
+          Copy invite link
         </button>
         {toast && <p className="text-center text-green-300 text-sm mb-4">{toast}</p>}
 
@@ -231,18 +225,6 @@ export default function CreateAuctionRoom({
           <p className="text-xs text-slate-400 mt-1">Alphanumeric only (no spaces or special characters)</p>
         </div>
 
-        {!fixedInventory && (
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Player Inventory</label>
-            <select value={inventoryType} onChange={(e) => setInventoryType(e.target.value)} className={field}>
-              {INVENTORY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div>

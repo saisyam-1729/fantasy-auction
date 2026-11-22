@@ -13,8 +13,8 @@ export type CricketEvent = {
   fullName: string
   blurb: string
   formats: EventFormat[]
-  /** draft_pool_players.pool */
-  pool: string
+  /** draft_pool_players.pool, when the event can be drafted */
+  pool?: string
   /** player_inventory.inventory_type, when the event can be auctioned */
   inventoryType?: string
   players: number
@@ -22,6 +22,16 @@ export type CricketEvent = {
 }
 
 export const EVENTS: CricketEvent[] = [
+  {
+    id: 'ipl-2026',
+    name: 'IPL 2026',
+    fullName: 'Indian Premier League 2026',
+    blurb: 'The classic live auction: ten franchises’ players, ₹ base prices, purse and bid steps.',
+    formats: ['auction'],
+    inventoryType: 'IPL',
+    players: 250,
+    teams: 10,
+  },
   {
     id: 'ilt20-2026',
     name: 'ILT20 2026',
@@ -45,15 +55,12 @@ export const EVENTS: CricketEvent[] = [
   },
 ]
 
-/** Inventory types that belong to an event, so the IPL Auction tab can leave them out. */
-export const EVENT_INVENTORY_TYPES = new Set(EVENTS.map((e) => e.inventoryType).filter((t): t is string => Boolean(t)))
-
 export function eventById(id: string | null | undefined): CricketEvent | null {
   return EVENTS.find((e) => e.id === id) ?? null
 }
 
 export function eventForPool(pool: string | null | undefined): CricketEvent | null {
-  return EVENTS.find((e) => e.pool === pool) ?? null
+  return pool ? (EVENTS.find((e) => e.pool === pool) ?? null) : null
 }
 
 export function eventForInventory(inventoryType: string | null | undefined): CricketEvent | null {

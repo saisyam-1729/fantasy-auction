@@ -1175,16 +1175,16 @@ export default function RoomPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="py-20 flex items-center justify-center">
         <div className="text-white text-xl">Loading room...</div>
       </div>
     )
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 ${showMiniBar ? 'pb-28' : ''}`}>
+    <div className={showMiniBar ? 'pb-28' : ''}>
       <ConnectionBanner state={connection} />
-      <div className="max-w-7xl mx-auto mb-6">
+      <div className="mb-6">
         <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-4">
           <div className="flex flex-col gap-3">
             <div className="flex justify-between items-center flex-wrap gap-4">
@@ -1289,7 +1289,7 @@ export default function RoomPage() {
       </div>
 
       {rejoinedActive && (
-        <div className="max-w-7xl mx-auto mb-4">
+        <div className="mb-4">
           <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-blue-500/20 border border-blue-400/40 text-blue-200 text-sm font-medium">
             <span>🔄</span>
             <span>You rejoined an active auction — bidding is live. Check the current lot above.</span>
@@ -1297,7 +1297,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto mb-6 flex gap-2 overflow-x-auto pb-1" role="navigation" aria-label="Room sections">
+      <div className="mb-6 flex gap-2 overflow-x-auto pb-1" role="navigation" aria-label="Room sections">
         {(['auction', 'squad', 'leaderboard', 'players', 'insights'] as const).map(tab => (
           <button
             key={tab}
@@ -1331,7 +1331,7 @@ export default function RoomPage() {
         <CloseAuctionDialog onCancel={() => setShowCloseDialog(false)} onConfirm={(m) => void hostClose(m)} />
       )}
 
-      <div className="max-w-7xl mx-auto">
+      <div>
         {activeTab === 'auction' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {showHostTools && (
