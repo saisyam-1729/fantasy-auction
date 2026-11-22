@@ -31,7 +31,7 @@ export default function LatestPick({
     <div
       key={pick.id}
       aria-live="polite"
-      className={`mb-4 rounded-2xl border-2 p-4 flex items-center gap-4 ${
+      className={`h-full min-w-0 rounded-2xl border-2 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 ${
         isMine ? 'border-emerald-400 bg-emerald-500/15' : 'border-amber-400 bg-amber-500/10'
       } ${fresh ? 'draft-pop' : ''}`}
     >

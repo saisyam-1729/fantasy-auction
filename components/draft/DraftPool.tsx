@@ -53,15 +53,15 @@ export default function DraftPool({
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row gap-2 mb-3">
+      <div className="flex flex-col gap-2 mb-3">
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search player or team…"
-          className={`${select} flex-1`}
+          className={`${select} w-full`}
         />
-        <div className="grid grid-cols-2 gap-2 sm:flex">
+        <div className="grid grid-cols-2 gap-2">
           <select value={team} onChange={(e) => setTeam(e.target.value)} className={select} aria-label="Filter by team">
             <option value="">All teams</option>
             {teams.map((t) => (
