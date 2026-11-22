@@ -8,6 +8,7 @@
  * Reads the "All Players" sheet (#, Team, Player, Captain, Wildcard, Role, Role Confidence,
  * Base Price, Base Price (₹ Lakh)) and writes supabase/ilt20_2026_seed.generated.sql.
  * Both inserts upsert, so re-running after squad changes keeps rooms that already use them.
+ * Players missing from the sheet can be added in EXTRA below.
  */
 const fs = require('fs')
 const path = require('path')
@@ -24,6 +25,13 @@ if (!file) {
 const sheet = XLSX.readFile(file).Sheets['All Players']
 if (!sheet) throw new Error('Sheet "All Players" not found')
 const rows = XLSX.utils.sheet_to_json(sheet, { defval: null })
+
+// Players missing from the sheet, added by hand. Keep # after the sheet's last row.
+const EXTRA = [
+  // missing from the sheet; added 2026-11-22 so a draft pick could be corrected
+  { '#': 142, Team: 'MI Emirates', Player: 'Gudakesh Motie', Role: 'Bowler', 'Role Confidence': 'High', 'Base Price (₹ Lakh)': 100 },
+]
+rows.push(...EXTRA)
 
 const clean = (v) => (v == null ? null : String(v).replace(/\s+/g, ' ').trim() || null)
 const sql = (v) => (v == null ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`)

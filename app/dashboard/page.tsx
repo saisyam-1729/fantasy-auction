@@ -7,15 +7,17 @@ import { User } from '@supabase/supabase-js'
 import CreateAuctionRoom from '@/components/auction/CreateAuctionRoom'
 import JoinAuctionRoom from '@/components/auction/JoinAuctionRoom'
 import EventsHome from '@/components/events/EventsHome'
+import LeaderboardHome from '@/components/leaderboard/LeaderboardHome'
 import { EVENT_INVENTORY_TYPES } from '@/lib/events'
 
-type DashboardTab = 'auction' | 'events'
+type DashboardTab = 'auction' | 'events' | 'leaderboard'
 const TAB_KEY = 'dashboard-tab'
 
 function savedTab(): DashboardTab {
   try {
     const v = typeof window !== 'undefined' ? window.localStorage.getItem(TAB_KEY) : null
     // 'smat' was the tab's name before Events
+    if (v === 'leaderboard') return 'leaderboard'
     return v === 'events' || v === 'smat' ? 'events' : 'auction'
   } catch {
     return 'auction'
@@ -71,7 +73,7 @@ export default function DashboardPage() {
       <div className="max-w-4xl mx-auto mb-8">
         <div className="flex justify-between items-center backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">🏏 {tab === 'events' ? 'Events' : 'IPL Auction'}</h1>
+            <h1 className="text-2xl font-bold text-white">{tab === 'leaderboard' ? '🏆 Leaderboard' : tab === 'events' ? '🏏 Events' : '🏏 IPL Auction'}</h1>
             <p className="text-slate-300 text-sm">Welcome, {user?.user_metadata?.username || user?.email}</p>
           </div>
           <button
@@ -85,10 +87,11 @@ export default function DashboardPage() {
 
       {/* IPL Auction / Events tabs */}
       <div className="max-w-2xl mx-auto mb-6">
-        <div role="tablist" className="grid grid-cols-2 gap-1 rounded-2xl bg-white/10 border border-white/20 p-1">
+        <div role="tablist" className="grid grid-cols-3 gap-1 rounded-2xl bg-white/10 border border-white/20 p-1">
           {([
             ['auction', 'IPL Auction'],
             ['events', 'Events'],
+            ['leaderboard', 'Leaderboard'],
           ] as const).map(([id, label]) => (
             <button
               key={id}
@@ -97,17 +100,27 @@ export default function DashboardPage() {
               aria-selected={tab === id}
               onClick={() => setTab(id)}
               className={`py-2.5 rounded-xl text-sm font-semibold transition ${
-                tab === id ? (id === 'events' ? 'bg-emerald-500 text-slate-900' : 'bg-yellow-500 text-slate-900') : 'text-slate-300 hover:bg-white/10'
+                tab === id
+                  ? id === 'events'
+                    ? 'bg-emerald-500 text-slate-900'
+                    : id === 'leaderboard'
+                      ? 'bg-sky-500 text-slate-900'
+                      : 'bg-yellow-500 text-slate-900'
+                  : 'text-slate-300 hover:bg-white/10'
               }`}
             >
               {label}
-              {id === 'events' && <span className="ml-1 text-xs font-normal opacity-80">ILT20 · SMAT</span>}
+              {id === 'events' && <span className="hidden sm:inline ml-1 text-xs font-normal opacity-80">ILT20 · SMAT</span>}
             </button>
           ))}
         </div>
       </div>
 
-      {tab === 'events' ? (
+      {tab === 'leaderboard' ? (
+        <div className="max-w-2xl mx-auto">
+          <LeaderboardHome />
+        </div>
+      ) : tab === 'events' ? (
         <div className="max-w-2xl mx-auto">
           <EventsHome />
         </div>

@@ -30,7 +30,7 @@ export const EVENTS: CricketEvent[] = [
     formats: ['auction', 'draft'],
     pool: 'ILT20_2026',
     inventoryType: 'ILT20_2026',
-    players: 141,
+    players: 142,
     teams: 6,
   },
   {

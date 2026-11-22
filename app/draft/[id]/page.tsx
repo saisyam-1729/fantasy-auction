@@ -354,13 +354,18 @@ export default function DraftRoomPage() {
             <div className="mb-4 rounded-2xl p-4 border bg-emerald-500/15 border-emerald-500/40">
               <p className="text-xl font-bold text-white">Draft complete</p>
               <p className="text-sm text-slate-200">All {total} picks are in.</p>
-              <button
-                type="button"
-                onClick={() => void copy(draftSummaryText(room.name, members, picks, playersById), 'Teams')}
-                className={`${btn} mt-3 bg-emerald-500 text-slate-900 hover:bg-emerald-400`}
-              >
-                Copy all teams
-              </button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => router.push(`/leaderboard/${id}`)} className={`${btn} bg-sky-500 text-slate-900 hover:bg-sky-400`}>
+                  🏆 Leaderboard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copy(draftSummaryText(room.name, members, picks, playersById), 'Teams')}
+                  className={`${btn} bg-emerald-500 text-slate-900 hover:bg-emerald-400`}
+                >
+                  Copy all teams
+                </button>
+              </div>
             </div>
           )}
 

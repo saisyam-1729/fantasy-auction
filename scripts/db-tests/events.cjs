@@ -21,19 +21,19 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
     const inv = (await q(`select count(*)::int n, count(distinct team)::int t, min(base_price)::bigint lo, max(base_price)::bigint hi,
                                  count(*) filter (where base_price not in (5000000,10000000,20000000))::int odd
                           from player_inventory where inventory_type='ILT20_2026'`)).rows[0]
-    rec('auction list has 141 players in 6 teams', inv.n === 141 && inv.t === 6, JSON.stringify(inv))
+    rec('auction list has 142 players in 6 teams', inv.n === 142 && inv.t === 6, JSON.stringify(inv))
     rec('base prices are 50 L, 1 Cr or 2 Cr', inv.odd === 0 && Number(inv.lo) === 5000000 && Number(inv.hi) === 20000000)
     const types = (await q(`select player_type, count(*)::int n from player_inventory where inventory_type='ILT20_2026' group by 1 order by 1`)).rows
     rec('roles use the auction codes', types.every((t) => ['ALL', 'BAT', 'BOWL', 'WK', 'UNK'].includes(t.player_type)), JSON.stringify(types))
     const pool = (await q(`select count(*)::int n from draft_pool_players where pool='ILT20_2026'`)).rows[0].n
-    rec('draft pool has the same 141 players', pool === 141, String(pool))
+    rec('draft pool has the same 142 players', pool === 142, String(pool))
 
     // re-running the seed does not duplicate anything
     await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', 'ilt20_2026_seed.generated.sql'), 'utf8'))
     const again = (await q(`select (select count(*) from player_inventory where inventory_type='ILT20_2026')::int a, (select count(*) from draft_pool_players where pool='ILT20_2026')::int d`)).rows[0]
-    rec('the seed can be re-run safely', again.a === 141 && again.d === 141, JSON.stringify(again))
+    rec('the seed can be re-run safely', again.a === 142 && again.d === 142, JSON.stringify(again))
 
-    // an auction room on the ILT20 list loads all 141 lots
+    // an auction room on the ILT20 list loads all 142 lots
     const U = u()
     await q(`insert into auth.users(id,aud,role,email) values($1,'authenticated','authenticated',$2)`, [U, 'ev-' + U.slice(0, 8) + '@example.invalid'])
     const room = u()
@@ -42,7 +42,7 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
     await as(U)
     await q('select public.initialize_room_players($1,$2)', [room, 'ILT20_2026'])
     const lots = (await q('select count(*)::int n from room_players where room_id=$1', [room])).rows[0].n
-    rec('an ILT20 auction room gets all 141 lots', lots === 141, String(lots))
+    rec('an ILT20 auction room gets all 142 lots', lots === 142, String(lots))
 
     // a draft room on the ILT20 pool
     const d = (await q(`select * from public.create_draft_room('EvDraft',5,6,'ILT20_2026')`)).rows[0]
