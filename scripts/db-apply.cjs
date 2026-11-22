@@ -36,6 +36,7 @@ const ORDER = [
   'fantasy_points.sql',
   'draft_extras.sql',
   'draft_admin.sql',
+  'realtime_tables.sql',
 ]
 
 const root = path.join(__dirname, '..')

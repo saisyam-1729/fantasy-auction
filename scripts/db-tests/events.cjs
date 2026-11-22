@@ -16,7 +16,7 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
   const as = (uid) => q(`select set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claims',$2,true)`, [uid, JSON.stringify({ sub: uid, role: 'authenticated' })])
   try {
     await q('begin')
-    for (const f of ['draft.sql', 'ilt20_2026_seed.generated.sql']) await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', f), 'utf8'))
+    for (const f of ['draft.sql', 'ilt20_2026_seed.generated.sql', 'fantasy_points.sql', 'draft_extras.sql']) await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', f), 'utf8'))
 
     const inv = (await q(`select count(*)::int n, count(distinct team)::int t, min(base_price)::bigint lo, max(base_price)::bigint hi,
                                  count(*) filter (where base_price not in (5000000,10000000,20000000))::int odd

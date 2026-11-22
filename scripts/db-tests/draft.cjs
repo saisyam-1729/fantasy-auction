@@ -23,7 +23,7 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
   try {
     await q('begin')
     // load the draft schema and seed inside this transaction, so the test also covers them
-    for (const f of ['draft.sql', 'draft_pool_smat2026_seed.generated.sql']) await q(fs.readFileSync(require('path').join(__dirname, '..', '..', 'supabase', f), 'utf8'))
+    for (const f of ['draft.sql', 'draft_pool_smat2026_seed.generated.sql', 'fantasy_points.sql', 'draft_extras.sql']) await q(fs.readFileSync(require('path').join(__dirname, '..', '..', 'supabase', f), 'utf8'))
     const U = Array.from({ length: 6 }, u) // U[0] host, U[1..3] players, U[4] outsider, U[5] late
     for (const id of U) await q(`insert into auth.users(id,aud,role,email,raw_user_meta_data) values($1,'authenticated','authenticated',$2,$3)`, [id, 'dr-' + id.slice(0, 8) + '@example.invalid', JSON.stringify({ username: 'p' + id.slice(0, 4) })])
     // a small private pool so the test does not depend on the seed

@@ -25,7 +25,9 @@ import { goingCall, goingCallLabel } from '@/lib/goingCall'
 import { compareBySets, setInfo, setProgress } from '@/lib/sets'
 import ResultsPanel from '@/components/room/ResultsPanel'
 import PlayerAvatar from '@/components/room/PlayerAvatar'
-import ConnectionBanner, { type ConnectionState } from '@/components/room/ConnectionBanner'
+import ConnectionBanner from '@/components/room/ConnectionBanner'
+import MyStatsPanel from '@/components/room/MyStatsPanel'
+import { useRoomSync } from '@/hooks/useRoomSync'
 import { useCountdown } from '@/hooks/useCountdown'
 import { useAutoSell } from '@/hooks/useAutoSell'
 import MySquadTab from '@/components/room/MySquadTab'
@@ -86,9 +88,6 @@ export default function RoomPage() {
   const [roomSort, setRoomSort] = useState<AuctionSortMode>('created_asc')
   const leavingRef = useRef(false)
   const [showCloseDialog, setShowCloseDialog] = useState(false)
-  const [connection, setConnection] = useState<ConnectionState>('live')
-  const connectionRef = useRef<ConnectionState>('live')
-  connectionRef.current = connection
   const [hostMinSquad, setHostMinSquad] = useState(String(DEFAULT_MIN_SQUAD))
   const [hostMaxSquad, setHostMaxSquad] = useState(String(DEFAULT_MAX_SQUAD))
   const [squadSizeMessage, setSquadSizeMessage] = useState('')
@@ -919,6 +918,34 @@ export default function RoomPage() {
   const loadedLotRef = useRef<string | null>(null)
   const lastLotKeyRef = useRef<string | null>(null)
 
+  /** Realtime plus safety-net polling for this room (see hooks/useRoomSync). */
+  const connection = useRoomSync(supabase, roomId, Boolean(roomId) && !loading, {
+    onAuctionState: (row) => {
+      if (!roomId) return
+      void fetchAuctionStateRef.current(roomId)
+      // The player list only changes when the lot moves on (sale, pass, start, end, undo),
+      // not on every bid or pause, so skip the heavy refetch otherwise.
+      const lotKey = `${row?.is_active}:${row?.current_player_id}`
+      if (lotKey !== lastLotKeyRef.current) {
+        lastLotKeyRef.current = lotKey
+        void fetchAllPlayersRef.current(roomId)
+      }
+      // Bid history is per lot and small, refresh on every bid
+      if (row?.current_player_id) void fetchBidHistoryRef.current(row.current_player_id)
+    },
+    onRoomUsers: () => roomId && void fetchRoomUsersRef.current(roomId),
+    onRoom: () => roomId && void fetchSquadSizesRef.current(roomId),
+    onRoomPlayers: () => roomId && void fetchAllPlayersRef.current(roomId),
+    resync: () => resyncRef.current(),
+    pollState: () => roomId && void fetchAuctionStateRef.current(roomId),
+    pollData: () => {
+      if (!roomId) return
+      void fetchRoomUsersRef.current(roomId)
+      void fetchAllPlayersRef.current(roomId)
+      void fetchSquadSizesRef.current(roomId)
+    },
+  })
+
   useEffect(() => {
     if (loading || !roomId || !auctionState) return
     if (auctionState.is_active) {
@@ -955,77 +982,6 @@ export default function RoomPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only room bootstrap
   }, [])
 
-  useEffect(() => {
-    if (!roomId) return
-
-    const auctionChannel = supabase
-      .channel(`auction_${roomId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'live_auction_state',
-        filter: `room_id=eq.${roomId}`
-      }, (payload) => {
-        void fetchAuctionStateRef.current(roomId)
-        const newRecord = (payload as { new?: { current_player_id?: string; is_active?: boolean } }).new
-        // The player list only changes when the lot moves on (sale, pass, start, end, undo),
-        // not on every bid or pause, so skip the heavy refetch otherwise.
-        const lotKey = `${newRecord?.is_active}:${newRecord?.current_player_id}`
-        if (lotKey !== lastLotKeyRef.current) {
-          lastLotKeyRef.current = lotKey
-          void fetchAllPlayersRef.current(roomId)
-        }
-        // Bid history is per lot and small, refresh on every bid
-        const pid = newRecord?.current_player_id
-        if (pid) void fetchBidHistoryRef.current(pid)
-      })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'room_users',
-        filter: `room_id=eq.${roomId}`
-      }, () => {
-        void fetchRoomUsersRef.current(roomId)
-      })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'rooms',
-        filter: `id=eq.${roomId}`
-      }, () => {
-        void fetchSquadSizesRef.current(roomId)
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          // Rejoined after a drop: catch up on anything missed.
-          if (connectionRef.current !== 'live') resyncRef.current()
-          setConnection(navigator.onLine ? 'live' : 'offline')
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          setConnection(navigator.onLine ? 'reconnecting' : 'offline')
-        }
-      })
-
-    const onOffline = () => setConnection('offline')
-    const onOnline = () => {
-      setConnection('reconnecting')
-      resyncRef.current()
-    }
-    // A sleeping phone tab misses events; refetch when it wakes up.
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') resyncRef.current()
-    }
-    window.addEventListener('offline', onOffline)
-    window.addEventListener('online', onOnline)
-    document.addEventListener('visibilitychange', onVisible)
-
-    return () => {
-      window.removeEventListener('offline', onOffline)
-      window.removeEventListener('online', onOnline)
-      document.removeEventListener('visibilitychange', onVisible)
-      supabase.removeChannel(auctionChannel)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- channel per roomId; handlers use refs
-  }, [roomId])
 
   /** Recompute upcoming lots whenever player list or auction lot changes. */
   useEffect(() => {
@@ -1039,27 +995,6 @@ export default function RoomPage() {
     )
   }, [allPlayers, auctionState?.current_player_id, roomSort, hostTypes, hostMinBase, hostMaxBase])
 
-  /**
-   * Always-on sync, lobby and live. Realtime is the fast path; this makes sure a
-   * missed event (sleeping phone, dropped socket, tables not in the realtime
-   * publication) is corrected within seconds on every screen.
-   */
-  useEffect(() => {
-    if (!roomId || loading) return
-    const id = roomId
-    const stateTimer = window.setInterval(() => {
-      void fetchAuctionStateRef.current(id)
-    }, 2500)
-    const dataTimer = window.setInterval(() => {
-      void fetchRoomUsersRef.current(id)
-      void fetchAllPlayersRef.current(id)
-      void fetchSquadSizesRef.current(id)
-    }, 10000)
-    return () => {
-      window.clearInterval(stateTimer)
-      window.clearInterval(dataTimer)
-    }
-  }, [roomId, loading])
 
   /**
    * Any change of auction phase (start, reset, pause, end, new lot) refetches the
@@ -1747,70 +1682,15 @@ export default function RoomPage() {
               )}
             </div>
 
-            <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-6 flex flex-col gap-6">
-              <div>
-                <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">
-                  My Stats
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-xs text-slate-400 mb-1">Remaining Budget</div>
-                    <div className="text-2xl font-bold text-green-400">
-                      {formatMoney(myPurse?.remaining || 0)}
-                    </div>
-                    {myPurse && (
-                      <div className="text-xs text-slate-300 mt-1">
-                        {purseLine(myPurse)}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-400 mb-1">Squad Size</div>
-                    <div className="text-2xl font-bold text-white">
-                      {currentUser?.squad_count || 0} / {maxSquadSize}
-                    </div>
-                    <div className="text-xs text-slate-400 mt-1">Minimum {minSquadSize}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-400 mb-1">Total Spent</div>
-                    <div className="text-xl font-bold text-red-400">
-                      {formatMoney(currentUser?.spent || 0)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {auctionState?.is_active && (
-                <div>
-                  <h3 className="text-sm font-bold text-white mb-3 border-b border-slate-700 pb-2">
-                    Bid History
-                  </h3>
-                  {bidHistory.length === 0 ? (
-                    <p className="text-slate-500 text-xs text-center py-4">No bids yet</p>
-                  ) : (
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                      {bidHistory.map((b, i) => (
-                        <div
-                          key={b.id}
-                          className={`flex justify-between items-center rounded-lg px-3 py-2 text-xs ${
-                            i === 0
-                              ? 'bg-yellow-500/20 border border-yellow-500/40'
-                              : 'bg-slate-800/60'
-                          }`}
-                        >
-                          <span className={`font-semibold truncate pr-2 ${i === 0 ? 'text-yellow-300' : 'text-slate-300'}`}>
-                            {b.display_name}
-                          </span>
-                          <span className={`shrink-0 font-bold ${i === 0 ? 'text-yellow-400' : 'text-slate-400'}`}>
-                            {formatMoney(b.amount)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <MyStatsPanel
+              remaining={myPurse?.remaining || 0}
+              purseText={myPurse ? purseLine(myPurse) : null}
+              squadCount={currentUser?.squad_count || 0}
+              minSquadSize={minSquadSize}
+              maxSquadSize={maxSquadSize}
+              spent={currentUser?.spent || 0}
+              bidHistory={auctionState?.is_active ? bidHistory : null}
+            />
           {auctionState?.is_active && (
             <div className="lg:col-span-3 backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-5">
               <h3 className="text-sm font-bold text-white mb-3">Squads so far</h3>
