@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 /**
- * Nightly fantasy-points sync (Vercel Cron, see vercel.json: 18:30 UTC = midnight IST).
+ * Nightly fantasy-points sync (Vercel Cron, see vercel.json: 20:30 UTC = 2:00 am IST).
  * For each event in fantasy_sources: download its points page, match players to the
  * draft pool, and store totals plus today's player and standings snapshots.
  *

@@ -71,7 +71,7 @@ export default function LeaderboardView({ draftId, currentUserId }: { draftId: s
               : ' · day-on-day changes start after the next nightly update'}
           </>
         ) : (
-          'No points yet. They update every night at 12:00 am.'
+          'No points yet. They update every night at about 2:00 am.'
         )}
       </div>
 

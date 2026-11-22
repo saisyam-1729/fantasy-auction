@@ -93,8 +93,8 @@ INSERT INTO public.fantasy_sources (pool, url, label) VALUES
   ('ILT20_2026', 'https://statz.ai/cricket/statz-leaders/ilt20/performance-points', 'Statz performance points')
 ON CONFLICT (pool) DO UPDATE SET url = EXCLUDED.url, label = EXCLUDED.label;
 
--- The India date a sync belongs to. The job runs at midnight IST; a run up to an
--- hour early (cron jitter) still counts for the new day.
+-- The India date a sync belongs to. The job runs at 2:00 am IST; the extra hour
+-- keeps an early run (cron jitter, or the old midnight schedule) on the new day.
 CREATE OR REPLACE FUNCTION public._points_day()
 RETURNS date
 LANGUAGE sql
