@@ -18,6 +18,7 @@ import {
   type DraftPick,
   type DraftPoolPlayer,
   type DraftRoom,
+  type WaiverClaim,
 } from '@/lib/draft'
 import { useSecondsLeft } from '@/hooks/useSecondsLeft'
 import { useTurnSound } from '@/hooks/useTurnSound'
@@ -37,6 +38,7 @@ export default function DraftRoomPage() {
   const [members, setMembers] = useState<DraftMember[]>([])
   const [picks, setPicks] = useState<DraftPick[]>([])
   const [captains, setCaptains] = useState<CaptainChoice[]>([])
+  const [waivers, setWaivers] = useState<WaiverClaim[]>([])
   const [pool, setPool] = useState<DraftPoolPlayer[]>([])
   const [loadError, setLoadError] = useState('')
   const [loaded, setLoaded] = useState(false)
@@ -51,11 +53,12 @@ export default function DraftRoomPage() {
   }, [])
 
   const refresh = useCallback(async () => {
-    const [r, m, p, cp] = await Promise.all([
+    const [r, m, p, cp, wv] = await Promise.all([
       supabase.from('draft_rooms').select('*').eq('id', id).maybeSingle(),
       supabase.from('draft_members').select('*').eq('draft_id', id),
       supabase.from('draft_picks').select('*').eq('draft_id', id).order('pick_no'),
       supabase.from('draft_captains').select('member_id, captain_id, vice_id, pending_captain_id, pending_vice_id, draft_members!inner(draft_id)').eq('draft_members.draft_id', id),
+      supabase.from('draft_waiver_claims').select('id, draft_id, member_id, add_player_id, drop_player_id, rank, status, note, processed_at').eq('draft_id', id).order('rank'),
     ])
     if (r.error || !r.data) {
       setLoadError(r.error?.message ?? 'This draft does not exist, or you are not in it.')
@@ -66,6 +69,7 @@ export default function DraftRoomPage() {
     setMembers((m.data ?? []) as DraftMember[])
     setPicks((p.data ?? []) as DraftPick[])
     const num = (v: unknown) => (v == null ? null : Number(v))
+    setWaivers(((wv.data ?? []) as WaiverClaim[]).map((w) => ({ ...w, add_player_id: Number(w.add_player_id), drop_player_id: Number(w.drop_player_id) })))
     setCaptains(
       ((cp.data ?? []) as Record<string, unknown>[]).map((c) => ({
         member_id: String(c.member_id),
@@ -255,6 +259,7 @@ export default function DraftRoomPage() {
       wishlist={wishlist}
       points={points}
       captains={captains}
+      waivers={waivers}
       secondsLeft={secondsLeft}
       sound={sound}
       actions={{
@@ -284,6 +289,15 @@ export default function DraftRoomPage() {
             { p_draft_id: id, p_captain: captainId, p_vice: viceId },
             'Captains saved. They count from the second nightly update after now.'
           ),
+        saveClaims: (adds, drops) =>
+          void call('draft_set_waiver_claims', { p_draft_id: id, p_adds: adds, p_drops: drops }, 'Claims saved. They run on Monday’s update.'),
+        setWaiversEnabled: (on) => void call('draft_set_waivers_enabled', { p_draft_id: id, p_on: on }, on ? 'Waivers are on' : 'Waivers are off'),
+        runWaivers: () =>
+          void supabase.rpc('draft_host_run_waivers', { p_draft_id: id }).then(({ data, error }) => {
+            if (error) flash(error.message, true)
+            else flash(`${data ?? 0} swap${data === 1 ? '' : 's'} made`)
+            void refresh()
+          }),
         setCaptainsEnabled: (on) => void call('draft_set_captains_enabled', { p_draft_id: id, p_on: on }, on ? 'Captains are on' : 'Captains are off'),
         replacePick: (pickNo, playerId) =>
           void call('draft_host_replace_pick', { p_draft_id: id, p_pick_no: pickNo, p_player_id: playerId }, `Pick #${pickNo + 1} changed`),

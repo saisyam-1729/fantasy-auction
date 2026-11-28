@@ -11,6 +11,8 @@ export type HostActions = {
   addPlayer: (team: string, name: string, role: string | null) => void
   resetPoints: () => void
   setCaptainsEnabled: (on: boolean) => void
+  setWaiversEnabled: (on: boolean) => void
+  runWaivers: () => void
 }
 
 const ROLES = ['Batter', 'WK-Batter', 'All-rounder', 'Bowler']
@@ -156,6 +158,25 @@ export default function HostTools({
             <Button size="sm" tone={room.captains_enabled ? 'danger' : 'draft'} disabled={busy} onClick={() => actions.setCaptainsEnabled(!room.captains_enabled)}>
               {room.captains_enabled ? 'Switch captains off' : 'Switch captains on'}
             </Button>
+          </section>
+        )}
+
+        {room.status === 'DONE' && (
+          <section className="space-y-2">
+            <h3 className="font-semibold text-white">Waivers</h3>
+            <p className="text-xs text-slate-400">
+              Free agency: each team may swap one player a week for an undrafted one. Claims run on Monday’s nightly update, lowest-ranked team first.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" tone={room.waivers_enabled ? 'danger' : 'draft'} disabled={busy} onClick={() => actions.setWaiversEnabled(!room.waivers_enabled)}>
+                {room.waivers_enabled ? 'Switch waivers off' : 'Switch waivers on'}
+              </Button>
+              {room.waivers_enabled && (
+                <Button size="sm" disabled={busy} onClick={actions.runWaivers}>
+                  Run claims now
+                </Button>
+              )}
+            </div>
           </section>
         )}
 

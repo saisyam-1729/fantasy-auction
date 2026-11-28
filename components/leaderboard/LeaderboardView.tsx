@@ -83,6 +83,7 @@ export function LeaderboardBoard({
   teams,
   captains = [],
   bonus,
+  banked,
 }: {
   board: Leaderboard
   currentUserId: string | null
@@ -94,6 +95,8 @@ export function LeaderboardBoard({
   captains?: CaptainChoice[]
   /** member id -> captain bonus included in their points */
   bonus?: Map<string, number>
+  /** member id -> points banked from players they dropped (included in their points) */
+  banked?: Map<string, number>
 }) {
   const labelOf = (row: LeaderboardRow) => {
     const t = teams?.get(row.member_id)
@@ -195,6 +198,9 @@ export function LeaderboardBoard({
                     {(bonus?.get(row.member_id) ?? 0) !== 0 && (
                       <p className="mt-1 text-xs text-amber-200">Includes +{formatPoints(bonus!.get(row.member_id)!)} captain bonus</p>
                     )}
+                    {(banked?.get(row.member_id) ?? 0) !== 0 && (
+                      <p className="mt-1 text-xs text-slate-300">Includes {formatPoints(banked!.get(row.member_id)!)} from dropped players</p>
+                    )}
                   </div>
                 )}
               </li>
@@ -225,6 +231,9 @@ export function LeaderboardBoard({
           {(bonus?.get(detail.member_id) ?? 0) !== 0 && (
             <p className="mt-3 text-xs text-amber-200">Includes +{formatPoints(bonus!.get(detail.member_id)!)} captain bonus</p>
           )}
+          {(banked?.get(detail.member_id) ?? 0) !== 0 && (
+            <p className="mt-1 text-xs text-slate-300">Includes {formatPoints(banked!.get(detail.member_id)!)} from dropped players</p>
+          )}
         </Card>
       )}
     </div>
@@ -240,6 +249,7 @@ export default function LeaderboardView({ draftId, currentUserId, pool }: { draf
   const [teams, setTeams] = useState<Map<string, TeamIdentity>>(new Map())
   const [captains, setCaptains] = useState<CaptainChoice[]>([])
   const [bonus, setBonus] = useState<Map<string, number>>(new Map())
+  const [banked, setBanked] = useState<Map<string, number>>(new Map())
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -260,7 +270,7 @@ export default function LeaderboardView({ draftId, currentUserId, pool }: { draf
     void Promise.all([
       supabase.from('draft_members').select('id, username, team_name, team_emoji, team_color').eq('draft_id', draftId),
       supabase.from('draft_captains').select('member_id, captain_id, vice_id, pending_captain_id, pending_vice_id, draft_members!inner(draft_id)').eq('draft_members.draft_id', draftId),
-      supabase.from('draft_member_bonus').select('member_id, points').eq('draft_id', draftId),
+      supabase.from('draft_member_bonus').select('member_id, points, banked').eq('draft_id', draftId),
     ]).then(([m, c, b]) => {
       if (!live) return
       setTeams(new Map(((m.data ?? []) as (TeamIdentity & { id: string })[]).map((x) => [x.id, x])))
@@ -274,7 +284,9 @@ export default function LeaderboardView({ draftId, currentUserId, pool }: { draf
           pending_vice_id: n(x.pending_vice_id),
         }))
       )
-      setBonus(new Map(((b.data ?? []) as { member_id: string; points: number }[]).map((x) => [x.member_id, Number(x.points)])))
+      const rows = (b.data ?? []) as { member_id: string; points: number; banked: number }[]
+      setBonus(new Map(rows.map((x) => [x.member_id, Number(x.points)])))
+      setBanked(new Map(rows.map((x) => [x.member_id, Number(x.banked)])))
     })
     return () => {
       live = false
@@ -294,5 +306,5 @@ export default function LeaderboardView({ draftId, currentUserId, pool }: { draf
 
   if (error) return <p className="text-red-200 text-sm">{error}</p>
   if (!board) return <p className="text-slate-300 text-sm">Loading leaderboard…</p>
-  return <LeaderboardBoard board={board} currentUserId={currentUserId} sync={sync} now={now} teams={teams} captains={captains} bonus={bonus} />
+  return <LeaderboardBoard board={board} currentUserId={currentUserId} sync={sync} now={now} teams={teams} captains={captains} bonus={bonus} banked={banked} />
 }

@@ -8,6 +8,7 @@ import LatestPick from '@/components/draft/LatestPick'
 import HostTools from '@/components/draft/HostTools'
 import TeamEditor from '@/components/draft/TeamEditor'
 import CaptainPanel from '@/components/draft/CaptainPanel'
+import WaiverPanel from '@/components/draft/WaiverPanel'
 import { Badge, Button, Card, PageHeader, Segmented, cx } from '@/components/ui'
 import { poolLabel } from '@/lib/events'
 import {
@@ -21,6 +22,7 @@ import {
   totalPicks,
   upcomingPicks,
   type CaptainChoice,
+  type WaiverClaim,
   type DraftMember,
   type DraftPick,
   type DraftPoolPlayer,
@@ -40,6 +42,9 @@ export type DraftActions = {
   saveTeam: (name: string, emoji: string, colour: string) => void
   saveCaptains: (captainId: number, viceId: number | null) => void
   setCaptainsEnabled: (on: boolean) => void
+  saveClaims: (adds: number[], drops: number[]) => void
+  setWaiversEnabled: (on: boolean) => void
+  runWaivers: () => void
   replacePick: (pickNo: number, playerId: number) => void
   addPlayer: (team: string, name: string, role: string | null) => void
   resetPoints: () => void
@@ -64,6 +69,8 @@ export type DraftRoomViewProps = {
   sound?: { enabled: boolean; toggle: () => void }
   /** Captain choices of every team in this draft (visible to all members). */
   captains?: CaptainChoice[]
+  /** Waiver claims I may see (mine, plus everyone's granted ones). */
+  waivers?: WaiverClaim[]
 }
 
 type Tab = 'pool' | 'teams' | 'log'
@@ -76,10 +83,10 @@ type Tab = 'pool' | 'teams' | 'log'
  * Laptop (lg): the pool sits beside the teams; Teams and Picks share the right side.
  * Wide (2xl): pool, teams and the pick feed are all visible at once.
  */
-export default function DraftRoomView({ room, members, picks, pool, userId, busy, notice, actions, wishlist, points, secondsLeft = null, sound, captains = [] }: DraftRoomViewProps) {
+export default function DraftRoomView({ room, members, picks, pool, userId, busy, notice, actions, wishlist, points, secondsLeft = null, sound, captains = [], waivers = [] }: DraftRoomViewProps) {
   const [tab, setTab] = useState<Tab>('pool')
   const [rightTab, setRightTab] = useState<'teams' | 'log'>('teams')
-  const [panel, setPanel] = useState<'team' | 'captains' | null>(null)
+  const [panel, setPanel] = useState<'team' | 'captains' | 'waivers' | null>(null)
 
   const ordered = useMemo(() => inDraftOrder(members), [members])
   const me = members.find((m) => m.user_id === userId) ?? null
@@ -145,6 +152,11 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
               ⭐ Captains
             </Button>
           )}
+          {me && room.waivers_enabled && room.status === 'DONE' && (
+            <Button size="sm" onClick={() => setPanel(panel === 'waivers' ? null : 'waivers')} aria-expanded={panel === 'waivers'}>
+              🔄 Waivers
+            </Button>
+          )}
           {sound && room.status !== 'DONE' && (
             <Button size="sm" onClick={sound.toggle} aria-pressed={sound.enabled} title="Play a sound when it is your turn">
               {sound.enabled ? '🔔 Sound on' : '🔕 Sound off'}
@@ -195,6 +207,21 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
               }}
             />
           </>
+        ) : panel === 'waivers' ? (
+          <>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Waivers</h2>
+            <WaiverPanel
+              key={me.id + waivers.filter((c) => c.status === 'PENDING').length}
+              myPlayers={myPlayers}
+              freeAgents={pool.filter((p) => !pickedBy.has(p.id))}
+              points={points}
+              claims={waivers}
+              members={members}
+              playersById={playersById}
+              busy={busy}
+              onSave={(adds, drops) => actions.saveClaims(adds, drops)}
+            />
+          </>
         ) : (
           <>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Captains</h2>
@@ -228,6 +255,8 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
         addPlayer: actions.addPlayer,
         resetPoints: actions.resetPoints,
         setCaptainsEnabled: actions.setCaptainsEnabled,
+        setWaiversEnabled: actions.setWaiversEnabled,
+        runWaivers: actions.runWaivers,
       }}
     />
   )

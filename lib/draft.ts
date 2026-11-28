@@ -29,6 +29,8 @@ export type DraftRoom = {
   turn_started_at?: string | null
   /** Whether teams may pick a Captain (2x) and Vice-captain (1.5x). */
   captains_enabled?: boolean
+  /** Whether finished-draft free agency (waivers) is on. */
+  waivers_enabled?: boolean
 }
 
 export type DraftMember = {
@@ -202,4 +204,16 @@ export function captainTag(choice: Pick<CaptainChoice, 'captain_id' | 'vice_id'>
   if (choice.captain_id === playerId) return 'C'
   if (choice.vice_id === playerId) return 'VC'
   return null
+}
+
+export type WaiverClaim = {
+  id: number
+  draft_id: string
+  member_id: string
+  add_player_id: number
+  drop_player_id: number
+  rank: number
+  status: 'PENDING' | 'WON' | 'LOST'
+  note: string | null
+  processed_at: string | null
 }
