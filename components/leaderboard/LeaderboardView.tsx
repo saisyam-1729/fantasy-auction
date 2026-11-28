@@ -241,7 +241,18 @@ export function LeaderboardBoard({
 }
 
 /** Loads one draft's leaderboard (and, given its pool, the last points update) and draws it. */
-export default function LeaderboardView({ draftId, currentUserId, pool }: { draftId: string; currentUserId: string | null; pool?: string }) {
+export default function LeaderboardView({
+  draftId,
+  currentUserId,
+  pool,
+  kind = 'draft',
+}: {
+  /** the draft's id, or the auction room's id when kind is 'auction' */
+  draftId: string
+  currentUserId: string | null
+  pool?: string
+  kind?: 'draft' | 'auction'
+}) {
   const [supabase] = useState(() => createClient())
   const [board, setBoard] = useState<Leaderboard | null>(null)
   const [sync, setSync] = useState<SyncStatus | null>(null)
@@ -254,7 +265,8 @@ export default function LeaderboardView({ draftId, currentUserId, pool }: { draf
 
   useEffect(() => {
     let live = true
-    void supabase.rpc('draft_leaderboard', { p_draft_id: draftId }).then(({ data, error: err }) => {
+    const request = kind === 'auction' ? supabase.rpc('auction_leaderboard', { p_room_id: draftId }) : supabase.rpc('draft_leaderboard', { p_draft_id: draftId })
+    void request.then(({ data, error: err }) => {
       if (!live) return
       if (err) setError(err.message)
       else setBoard(data as Leaderboard)
@@ -263,9 +275,10 @@ export default function LeaderboardView({ draftId, currentUserId, pool }: { draf
     return () => {
       live = false
     }
-  }, [supabase, draftId])
+  }, [supabase, draftId, kind])
 
   useEffect(() => {
+    if (kind === 'auction') return // team names, captains and bonuses are draft features
     let live = true
     void Promise.all([
       supabase.from('draft_members').select('id, username, team_name, team_emoji, team_color').eq('draft_id', draftId),
@@ -291,7 +304,7 @@ export default function LeaderboardView({ draftId, currentUserId, pool }: { draf
     return () => {
       live = false
     }
-  }, [supabase, draftId])
+  }, [supabase, draftId, kind])
 
   useEffect(() => {
     if (!pool) return

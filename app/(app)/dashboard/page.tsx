@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from '@/components/shell/AppShell'
 import { Badge, Button, Card, PageHeader } from '@/components/ui'
-import { EVENTS, eventForInventory, poolLabel } from '@/lib/events'
+import { EVENTS, auctionHasLeaderboard, eventForInventory, poolLabel } from '@/lib/events'
 import { MEDALS, formatPoints, pointsGain, rankMove, type Leaderboard } from '@/lib/fantasyPoints'
 import { teamLabel, type DraftStatus } from '@/lib/draft'
 import { buildRecap, type Recap } from '@/lib/recap'
@@ -22,8 +22,8 @@ type RoomItem = {
   at: string
 }
 
-type Standing = { draftId: string; event: string; name: string; rank: number; teams: number; points: number; move: number | null; gain: number | null }
-type RecapItem = { draftId: string; event: string; recap: Recap; accent: string | undefined }
+type Standing = { draftId: string; href: string; event: string; name: string; rank: number; teams: number; points: number; move: number | null; gain: number | null }
+type RecapItem = { draftId: string; href: string; event: string; recap: Recap; accent: string | undefined }
 
 const DRAFT_STATUS: Record<DraftStatus, [string, RoomItem['tone']]> = {
   LOBBY: ['Lobby', 'yellow'],
@@ -66,6 +66,13 @@ export default function HomePage() {
       setRooms(items)
 
       const started = (drafts.data ?? []).filter((d) => d.status !== 'LOBBY')
+      const scoredAuctions = (auctions.data ?? []).filter((r) => auctionHasLeaderboard(r.player_inventory_type))
+      const auctionBoards = await Promise.all(
+        scoredAuctions.map(async (r) => {
+          const { data } = await supabase.rpc('auction_leaderboard', { p_room_id: r.id })
+          return { r, board: data as Leaderboard | null }
+        })
+      )
       const [boards, teamRows] = await Promise.all([
         Promise.all(
           started.map(async (d) => {
@@ -90,6 +97,7 @@ export default function HomePage() {
         if (!board || !me) continue
         standing.push({
           draftId: d.id,
+          href: `/leaderboard/${d.id}`,
           event: poolLabel(d.pool),
           name: d.name,
           rank: me.rank,
@@ -99,7 +107,26 @@ export default function HomePage() {
           gain: pointsGain(me),
         })
         const recap = buildRecap(board, user.id, label)
-        if (recap) recapItems.push({ draftId: d.id, event: poolLabel(d.pool), recap, accent: identity.get(me.member_id)?.team_color ?? undefined })
+        if (recap) recapItems.push({ draftId: d.id, href: `/leaderboard/${d.id}`, event: poolLabel(d.pool), recap, accent: identity.get(me.member_id)?.team_color ?? undefined })
+      }
+      for (const { r, board } of auctionBoards) {
+        const me = board?.rows.find((x) => x.user_id === user.id)
+        // an auction with no squads yet has nothing to rank
+        if (!board || !me || board.rows.every((x) => x.players.length === 0)) continue
+        const event = eventForInventory(r.player_inventory_type)?.name ?? r.player_inventory_type
+        standing.push({
+          draftId: r.id,
+          href: `/leaderboard/auction/${r.id}`,
+          event: event + ' auction',
+          name: r.room_name,
+          rank: me.rank,
+          teams: board.rows.length,
+          points: Number(me.points),
+          move: rankMove(me),
+          gain: pointsGain(me),
+        })
+        const recap = buildRecap(board, user.id)
+        if (recap) recapItems.push({ draftId: r.id, href: `/leaderboard/auction/${r.id}`, event: event + ' auction', recap, accent: undefined })
       }
       setStandings(standing)
       setRecaps(recapItems)
@@ -129,7 +156,7 @@ export default function HomePage() {
       {recaps.length > 0 && (
         <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {recaps.map((r) => (
-            <RecapCard key={r.draftId} recap={r.recap} event={r.event} href={`/leaderboard/${r.draftId}`} accent={r.accent} />
+            <RecapCard key={r.draftId} recap={r.recap} event={r.event} href={r.href} accent={r.accent} />
           ))}
         </div>
       )}
@@ -181,7 +208,7 @@ export default function HomePage() {
               <ul className="space-y-2">
                 {standings.map((s) => (
                   <li key={s.draftId}>
-                    <Link href={`/leaderboard/${s.draftId}`} className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/40 px-3 py-2.5 hover:bg-white/5">
+                    <Link href={s.href} className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/40 px-3 py-2.5 hover:bg-white/5">
                       <span className="w-9 text-center text-xl">{s.points > 0 && MEDALS[s.rank] ? MEDALS[s.rank] : <span className="text-base font-bold text-slate-200">{s.rank}</span>}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-white">{s.event}</span>

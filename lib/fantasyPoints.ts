@@ -57,7 +57,10 @@ export function normName(s: string): string {
  * Source spellings that differ from the squad sheet: normalised source name ->
  * normalised pool name. Add entries when the nightly log lists a player as unmatched.
  */
-export const NAME_ALIASES: Record<string, string> = {}
+export const NAME_ALIASES: Record<string, string> = {
+  // the points page also lists him as "Masood Gurbaz" next to "Masood Ul Rahman Gurbaz": the second spelling is ignored
+  'masood gurbaz': 'masood ul rahman gurbaz',
+}
 
 /**
  * Match source rows to pool players: same name and team first, then the same
@@ -89,6 +92,7 @@ export function matchPoints(source: SourceRow[], pool: PoolPlayer[]): { matched:
       })
       if (loose.length === 1) pick = loose[0]
     }
+    if (pick && used.has(pick.id) && NAME_ALIASES[n]) continue // a known second spelling of a player already counted
     if (!pick || used.has(pick.id)) {
       unmatched.push(r)
       continue
@@ -97,6 +101,21 @@ export function matchPoints(source: SourceRow[], pool: PoolPlayer[]): { matched:
     matched.push({ player_id: pick.id, points: r.points, matches: r.matches })
   }
   return { matched, unmatched }
+}
+
+/**
+ * Refuse a page that looks broken, so a changed layout or an error page never
+ * overwrites good totals. `lastRows` is how many rows the previous good update had.
+ * The page may legitimately grow (more players play), but it should not shrink a lot,
+ * and an update where every player is at zero after earlier non-zero totals is suspect.
+ */
+export function checkSourceSane(rows: SourceRow[], lastRows: number | null, lastTotal: number | null = null): void {
+  if (rows.length === 0) throw new Error('The points page had no player rows (did its layout change?)')
+  if (lastRows != null && lastRows >= 10 && rows.length < Math.ceil(lastRows * 0.5)) {
+    throw new Error(`The points page had ${rows.length} rows, but ${lastRows} last time. Refusing to update (did its layout change?)`)
+  }
+  const total = rows.reduce((s, r) => s + r.points, 0)
+  if (lastTotal != null && lastTotal > 0 && total === 0) throw new Error('Every player is at 0 points now. Refusing to update (did its layout change?)')
 }
 
 /** Download an event's points page and read its rows. */

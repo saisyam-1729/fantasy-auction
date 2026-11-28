@@ -93,3 +93,59 @@ describe('leaderboard helpers', () => {
     expect(formatPoints(7.5)).toBe('7.5')
   })
 })
+
+describe('checkSourceSane', () => {
+  const rows = (n: number, pts = 5) => Array.from({ length: n }, (_, i) => ({ name: 'P' + i, team: 'T', points: pts, matches: 1 }))
+
+  it('accepts a normal page, including a larger one', async () => {
+    const { checkSourceSane } = await import('@/lib/fantasyPoints')
+    expect(() => checkSourceSane(rows(80), 78, 4000)).not.toThrow()
+    expect(() => checkSourceSane(rows(120), 80, 4000)).not.toThrow()
+  })
+
+  it('refuses an empty page', async () => {
+    const { checkSourceSane } = await import('@/lib/fantasyPoints')
+    expect(() => checkSourceSane([], 80)).toThrow(/no player rows/)
+  })
+
+  it('refuses a page that shrank a lot', async () => {
+    const { checkSourceSane } = await import('@/lib/fantasyPoints')
+    expect(() => checkSourceSane(rows(10), 80)).toThrow(/Refusing to update/)
+  })
+
+  it('allows a small first page, and a small drop', async () => {
+    const { checkSourceSane } = await import('@/lib/fantasyPoints')
+    expect(() => checkSourceSane(rows(5), null)).not.toThrow()
+    expect(() => checkSourceSane(rows(6), 8)).not.toThrow()
+    expect(() => checkSourceSane(rows(70), 80)).not.toThrow()
+  })
+
+  it('refuses all-zero points after earlier totals', async () => {
+    const { checkSourceSane } = await import('@/lib/fantasyPoints')
+    expect(() => checkSourceSane(rows(80, 0), 80, 4000)).toThrow(/at 0 points/)
+    expect(() => checkSourceSane(rows(80, 0), 80, 0)).not.toThrow()
+  })
+})
+
+describe('name aliases', () => {
+  it('matches the spelling the points page uses for Masood Gurbaz', async () => {
+    const { matchPoints } = await import('@/lib/fantasyPoints')
+    const pool = [{ id: 7, team: 'Dubai Capitals', player_name: 'Masood ul Rahman Gurbaz' }]
+    const r = matchPoints([{ name: 'Masood Gurbaz', team: 'Dubai Capitals', points: 10, matches: 1 }], pool)
+    expect(r.matched).toEqual([{ player_id: 7, points: 10, matches: 1 }])
+  })
+
+  it('ignores the alias spelling when the full spelling is also listed, without calling it unmatched', async () => {
+    const { matchPoints } = await import('@/lib/fantasyPoints')
+    const pool = [{ id: 7, team: 'Dubai Capitals', player_name: 'Masood ul Rahman Gurbaz' }]
+    const r = matchPoints(
+      [
+        { name: 'Masood Ul Rahman Gurbaz', team: 'Dubai Capitals', points: 12, matches: 2 },
+        { name: 'Masood Gurbaz', team: 'Dubai Capitals', points: 10, matches: 1 },
+      ],
+      pool
+    )
+    expect(r.matched).toEqual([{ player_id: 7, points: 12, matches: 2 }])
+    expect(r.unmatched).toEqual([])
+  })
+})

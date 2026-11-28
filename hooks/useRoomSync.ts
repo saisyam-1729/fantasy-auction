@@ -62,8 +62,9 @@ export function useRoomSync(supabase: SupabaseClient, roomId: string | null, ena
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_players', filter: `room_id=eq.${roomId}` }, playersChanged)
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          // Rejoined after a drop: catch up on anything missed.
-          if (connectionRef.current !== 'live') h.current.resync()
+          // Catch up every time the channel (re)joins: anything that happened while it
+          // was still connecting, or while it was down, was not delivered.
+          h.current.resync()
           setConnection(navigator.onLine ? 'live' : 'offline')
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           setConnection(navigator.onLine ? 'reconnecting' : 'offline')

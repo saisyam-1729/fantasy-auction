@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "db:apply": "node scripts/db-apply.cjs",
     "db:test": "node scripts/db-test.cjs",
-    "db:cleanup": "node scripts/cleanup-rooms.cjs"
+    "db:cleanup": "node scripts/cleanup-rooms.cjs",
+    "e2e": "playwright test",
+    "e2e:cleanup": "node scripts/e2e-cleanup.cjs"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -25,9 +27,11 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

@@ -26,7 +26,7 @@ import { useWakeLock } from '@/hooks/useWakeLock'
 
 /** Poll this often only while live updates are down; otherwise a slow safety refresh. */
 const FALLBACK_POLL_MS = 4000
-const SAFETY_POLL_MS = 30000
+const SAFETY_POLL_MS = 15000
 
 /** Draft room: loads and syncs the data and performs actions; DraftRoomView draws it. */
 export default function DraftRoomPage() {
@@ -131,8 +131,9 @@ export default function DraftRoomPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'draft_picks', filter: `draft_id=eq.${id}` }, onChange)
       .subscribe((status) => {
         const up = status === 'SUBSCRIBED'
-        // catch up on anything missed while the channel was down
-        if (up && !channelUp.current) onChange()
+        // Catch up every time the channel (re)joins: anything that happened while it
+        // was still connecting, or while it was down, was not delivered.
+        if (up) onChange()
         channelUp.current = up
       })
     let lastPoll = Date.now()

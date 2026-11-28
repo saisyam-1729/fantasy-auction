@@ -1,0 +1,34 @@
+name: Points watchdog
+
+# Every morning (04:00 India time, after the 02:00 update) ask the app whether the
+# nightly points update ran. If a night was missed the app answers 503, this job
+# fails, and GitHub emails you (Settings -> Notifications -> Actions).
+#
+# One-time setup: GitHub -> Settings -> Secrets and variables -> Actions -> Variables,
+# add APP_URL = your production address, e.g. https://your-app.vercel.app (no trailing slash).
+# Note: GitHub pauses scheduled workflows in a repository with no activity for 60 days.
+
+on:
+  schedule:
+    - cron: '30 22 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the nightly points update
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "Set the APP_URL repository variable to enable this check."
+            exit 0
+          fi
+          body=$(curl -sS --retry 3 --retry-delay 10 --max-time 30 -w '\n%{http_code}' "$APP_URL/api/health/points")
+          code=$(echo "$body" | tail -n1)
+          echo "$body" | head -n -1
+          if [ "$code" != "200" ]; then
+            echo "::error::Points update is unhealthy (HTTP $code). A night was probably missed."
+            exit 1
+          fi

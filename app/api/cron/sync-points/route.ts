@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { fetchSourceRows, matchPoints, type PoolPlayer } from '@/lib/fantasyPoints'
+import { checkSourceSane, fetchSourceRows, matchPoints, type PoolPlayer } from '@/lib/fantasyPoints'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -38,6 +38,10 @@ export async function GET(request: NextRequest) {
   for (const src of sources ?? []) {
     try {
       const rows = await fetchSourceRows(src.url)
+      // compare with the last good update before trusting this page
+      const { data: last } = await db.from('points_sync_log').select('source_rows').eq('pool', src.pool).order('ran_at', { ascending: false }).limit(1)
+      const { data: totals } = await db.from('player_points').select('points').eq('pool', src.pool)
+      checkSourceSane(rows, last?.[0]?.source_rows ?? null, (totals ?? []).reduce((s, t) => s + Number(t.points), 0))
       const { data: pool, error: poolError } = await db.rpc('points_pool_players', { p_pool: src.pool })
       if (poolError) throw new Error(poolError.message)
       const { matched, unmatched } = matchPoints(rows, (pool ?? []) as PoolPlayer[])
@@ -48,6 +52,9 @@ export async function GET(request: NextRequest) {
         p_unmatched: unmatched.map((u) => ({ name: u.name, team: u.team, points: u.points })),
       })
       if (saveError) throw new Error(saveError.message)
+      // standings snapshots of auction rooms that use this event's players
+      const { error: auctionError } = await db.rpc('snapshot_auction_standings', { p_pool: src.pool })
+      if (auctionError) throw new Error('auction snapshot: ' + auctionError.message)
       const line = { pool: src.pool, rows: rows.length, matched: matched.length, unmatched: unmatched.map((u) => u.name), saved }
       console.log('[sync-points]', JSON.stringify(line))
       report.push(line)

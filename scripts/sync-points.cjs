@@ -11,7 +11,7 @@ const fs = require('fs')
 const path = require('path')
 const { Client } = require('pg')
 const jiti = require('jiti')(__filename)
-const { fetchSourceRows, matchPoints } = jiti('../lib/fantasyPoints.ts')
+const { checkSourceSane, fetchSourceRows, matchPoints } = jiti('../lib/fantasyPoints.ts')
 
 const root = path.join(__dirname, '..')
 const url = fs.readFileSync(path.join(root, '.env.local'), 'utf8').match(/^SUPABASE_DB_URL=(.*)$/m)[1].trim().replace(/^["']|["']$/g, '')
@@ -23,6 +23,9 @@ const dry = process.argv.includes('--dry')
   try {
     for (const src of (await c.query('select pool, url from fantasy_sources order by pool')).rows) {
       const source = await fetchSourceRows(src.url)
+      const last = (await c.query('select source_rows from points_sync_log where pool=$1 order by ran_at desc limit 1', [src.pool])).rows[0]
+      const total = Number((await c.query('select coalesce(sum(points),0) t from player_points where pool=$1', [src.pool])).rows[0].t)
+      checkSourceSane(source, last ? last.source_rows : null, total)
       const pool = (await c.query('select id::int, team, player_name from draft_pool_players where pool=$1', [src.pool])).rows
       const { matched, unmatched } = matchPoints(source, pool)
       console.log(`${src.pool}: ${source.length} rows on the page, ${matched.length} matched, ${unmatched.length} unmatched`)
@@ -35,6 +38,8 @@ const dry = process.argv.includes('--dry')
         JSON.stringify(unmatched.map((u) => ({ name: u.name, team: u.team, points: u.points }))),
       ])
       console.log('  saved', JSON.stringify(r.rows[0].r))
+      const snap = await c.query('select public.snapshot_auction_standings($1) n', [src.pool])
+      console.log('  auction rooms snapshotted:', snap.rows[0].n)
     }
   } finally {
     await c.end()

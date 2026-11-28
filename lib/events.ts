@@ -19,6 +19,8 @@ export type CricketEvent = {
   inventoryType?: string
   players: number
   teams: number
+  /** True when the nightly points update scores this event's players (a fantasy_sources row exists). */
+  fantasyPoints?: boolean
 }
 
 export const EVENTS: CricketEvent[] = [
@@ -42,6 +44,7 @@ export const EVENTS: CricketEvent[] = [
     inventoryType: 'ILT20_2026',
     players: 142,
     teams: 6,
+    fantasyPoints: true,
   },
   {
     id: 'smat-2026',
@@ -49,6 +52,7 @@ export const EVENTS: CricketEvent[] = [
     fullName: 'Syed Mushtaq Ali Trophy 2026-27',
     blurb: 'India’s domestic T20. Draft from 34 state squads.',
     formats: ['draft'],
+    fantasyPoints: false,
     pool: 'SMAT_2026',
     players: 544,
     teams: 34,
@@ -70,4 +74,9 @@ export function eventForInventory(inventoryType: string | null | undefined): Cri
 /** Display name for a draft pool, e.g. "SMAT 2026"; falls back to the raw key. */
 export function poolLabel(pool: string | null | undefined): string {
   return eventForPool(pool)?.name ?? (pool ? pool.replace(/_/g, ' ') : 'Draft')
+}
+
+/** Whether an auction room on this player list has a fantasy leaderboard. */
+export function auctionHasLeaderboard(inventoryType: string | null | undefined): boolean {
+  return Boolean(eventForInventory(inventoryType)?.fantasyPoints)
 }
