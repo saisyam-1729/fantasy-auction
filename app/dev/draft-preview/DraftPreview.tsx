@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import DraftRoomView from '@/components/draft/DraftRoomView'
-import { moveInList } from '@/lib/draft'
+import { moveInList, type CaptainChoice } from '@/lib/draft'
 import type { DraftMember, DraftPick, DraftPoolPlayer, DraftRoom } from '@/lib/draft'
 import fixture from './fixture.json'
 
@@ -11,8 +11,17 @@ const noop = () => {}
 /** Sample draft for /dev/draft-preview: 7 teams, 12 picks each, real ILT20 pool. */
 export default function DraftPreview({ state, me }: { state: 'lobby' | 'drafting' | 'done'; me: number }) {
   const [wish, setWish] = useState<number[]>(() => fixture.pool.slice(40, 44).map((p) => p.id))
+  const myPicks = (fixture.picks as DraftPick[]).filter((p) => p.member_id === 'm' + me)
+  const captains: CaptainChoice[] = [
+    { member_id: 'm' + me, captain_id: myPicks[0]?.player_id ?? null, vice_id: myPicks[1]?.player_id ?? null, pending_captain_id: myPicks[2]?.player_id ?? null, pending_vice_id: null },
+  ]
   const points = new Map(fixture.pool.map((p) => [p.id, (p.id * 37) % 90] as const))
-  const members = fixture.members as DraftMember[]
+  const identities: Record<string, Partial<DraftMember>> = {
+    m1: { team_name: 'Asha Aces', team_emoji: '🦅', team_color: '#06b6d4' },
+    m4: { team_name: 'Dev Dynamos', team_emoji: '⚡', team_color: '#eab308' },
+    m6: { team_name: 'Farid FC', team_emoji: '🔥', team_color: '#ef4444' },
+  }
+  const members = (fixture.members as DraftMember[]).map((m) => ({ ...m, ...identities[m.id] }))
   const all = fixture.picks as DraftPick[]
   const picks = state === 'lobby' ? [] : state === 'done' ? all : all.slice(0, 31)
   const room: DraftRoom = {
@@ -28,6 +37,7 @@ export default function DraftPreview({ state, me }: { state: 'lobby' | 'drafting
     last_spin: null,
     started_at: null,
     pick_seconds: 60,
+    captains_enabled: true,
   }
   return (
     <DraftRoomView
@@ -40,9 +50,10 @@ export default function DraftPreview({ state, me }: { state: 'lobby' | 'drafting
       notice={null}
       wishlist={{ ids: wish, toggle: (id) => setWish(wish.includes(id) ? wish.filter((x) => x !== id) : [...wish, id]), move: (id, dir) => setWish(moveInList(wish, id, dir)) }}
       points={points}
+      captains={captains}
       secondsLeft={state === 'drafting' ? 42 : null}
       sound={{ enabled: false, toggle: noop }}
-      actions={{ spin: noop, start: noop, resetOrder: noop, removeMember: noop, pick: noop, undo: noop, deleteDraft: noop, copyInvite: noop, copyTeams: noop, replacePick: noop, addPlayer: noop, resetPoints: noop }}
+      actions={{ spin: noop, start: noop, resetOrder: noop, removeMember: noop, pick: noop, undo: noop, deleteDraft: noop, copyInvite: noop, copyTeams: noop, saveTeam: noop, saveCaptains: noop, setCaptainsEnabled: noop, replacePick: noop, addPlayer: noop, resetPoints: noop }}
     />
   )
 }

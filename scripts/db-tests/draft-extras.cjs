@@ -21,7 +21,7 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
   }
   try {
     await q('begin')
-    for (const f of ['draft.sql', 'fantasy_points.sql', 'draft_extras.sql']) await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', f), 'utf8'))
+    for (const f of ['draft.sql', 'fantasy_points.sql', 'draft_extras.sql', 'draft_teams.sql']) await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', f), 'utf8'))
     const pool = 'TESTX_' + u().slice(0, 8)
     const P = []
     for (let i = 0; i < 10; i++) P.push(Number((await q(`insert into draft_pool_players(pool,sort_no,team,player_name) values($1,$2::int,'T','P'||$2::text) returning id`, [pool, i])).rows[0].id))
@@ -72,6 +72,7 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
     r = await call(U[0], 'select public.draft_auto_pick($1,1)', [D]); rec('the next turn has its own full time', /not run out/.test(r.err || ''), r.err)
 
     // second team: no wishlist, so the player with the most points
+    await call(order[1].user_id, 'select public.draft_set_wishlist($1,$2::bigint[])', [D, []])
     await q(`insert into player_points(player_id,pool,points) values($1,$2,50),($3,$2,70)`, [P[8], pool, P[9]])
     await q(`update draft_rooms set turn_started_at = now() - interval '40 seconds' where id=$1`, [D])
     r = await call(U[0], 'select public.draft_auto_pick($1,1)', [D]); rec('without a wishlist, auto-pick takes the most points', Number(r.v) === P[9], String(r.v ?? r.err))

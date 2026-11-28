@@ -27,6 +27,8 @@ export type DraftRoom = {
   pick_seconds?: number | null
   /** When the current turn began (the pick timer counts from here). */
   turn_started_at?: string | null
+  /** Whether teams may pick a Captain (2x) and Vice-captain (1.5x). */
+  captains_enabled?: boolean
 }
 
 export type DraftMember = {
@@ -37,6 +39,10 @@ export type DraftMember = {
   is_host: boolean
   order_pos: number | null
   joined_at: string
+  /** Optional team identity, set by the member. */
+  team_name?: string | null
+  team_emoji?: string | null
+  team_color?: string | null
 }
 
 export type DraftPoolPlayer = {
@@ -169,3 +175,31 @@ export const PICK_TIMER_OPTIONS = [
   { value: '120', label: '2 minutes' },
   { value: '300', label: '5 minutes' },
 ] as const
+
+/** What to call a team: its name (with emoji) when set, else the member's username. */
+export function teamLabel(m: Pick<DraftMember, 'username' | 'team_name' | 'team_emoji'>): string {
+  const name = m.team_name?.trim()
+  return name ? `${m.team_emoji ? m.team_emoji + ' ' : ''}${name}` : m.username
+}
+
+export const TEAM_EMOJIS = ['🦁', '🐯', '🦅', '🐺', '🔥', '⚡', '🚀', '👑', '🏏', '🌪️', '🐉', '💎'] as const
+export const TEAM_COLOURS = ['#10b981', '#06b6d4', '#6366f1', '#a855f7', '#ec4899', '#ef4444', '#f97316', '#eab308', '#84cc16', '#94a3b8'] as const
+
+export type CaptainChoice = {
+  member_id: string
+  captain_id: number | null
+  vice_id: number | null
+  pending_captain_id: number | null
+  pending_vice_id: number | null
+}
+
+export const CAPTAIN_MULTIPLIER = 2
+export const VICE_MULTIPLIER = 1.5
+
+/** "C" / "VC" for a player on a team with the given active choice, else null. */
+export function captainTag(choice: Pick<CaptainChoice, 'captain_id' | 'vice_id'> | undefined, playerId: number): 'C' | 'VC' | null {
+  if (!choice) return null
+  if (choice.captain_id === playerId) return 'C'
+  if (choice.vice_id === playerId) return 'VC'
+  return null
+}

@@ -16,7 +16,7 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
   const as = (uid) => q(`select set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claims',$2,true)`, [uid, JSON.stringify({ sub: uid, role: 'authenticated' })])
   try {
     await q('begin')
-    for (const f of ['draft.sql', 'ilt20_2026_seed.generated.sql', 'fantasy_points.sql', 'draft_extras.sql']) await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', f), 'utf8'))
+    for (const f of ['draft.sql', 'ilt20_2026_seed.generated.sql', 'fantasy_points.sql', 'draft_extras.sql', 'draft_teams.sql']) await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', f), 'utf8'))
 
     const inv = (await q(`select count(*)::int n, count(distinct team)::int t, min(base_price)::bigint lo, max(base_price)::bigint hi,
                                  count(*) filter (where base_price not in (5000000,10000000,20000000))::int odd
@@ -26,12 +26,12 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
     const types = (await q(`select player_type, count(*)::int n from player_inventory where inventory_type='ILT20_2026' group by 1 order by 1`)).rows
     rec('roles use the auction codes', types.every((t) => ['ALL', 'BAT', 'BOWL', 'WK', 'UNK'].includes(t.player_type)), JSON.stringify(types))
     const pool = (await q(`select count(*)::int n from draft_pool_players where pool='ILT20_2026'`)).rows[0].n
-    rec('draft pool has the same 142 players', pool === 142, String(pool))
+    rec('draft pool has at least the 142 sheet players (hosts may add more)', pool >= 142, String(pool))
 
     // re-running the seed does not duplicate anything
     await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', 'ilt20_2026_seed.generated.sql'), 'utf8'))
     const again = (await q(`select (select count(*) from player_inventory where inventory_type='ILT20_2026')::int a, (select count(*) from draft_pool_players where pool='ILT20_2026')::int d`)).rows[0]
-    rec('the seed can be re-run safely', again.a === 142 && again.d === 142, JSON.stringify(again))
+    rec('the seed can be re-run safely', again.a === 142 && again.d === pool, JSON.stringify(again))
 
     // an auction room on the ILT20 list loads all 142 lots
     const U = u()

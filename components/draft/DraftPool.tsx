@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { initials } from '@/lib/teams'
 import { formatPoints } from '@/lib/fantasyPoints'
 import { Segmented, cx } from '@/components/ui'
-import type { DraftMember, DraftPoolPlayer } from '@/lib/draft'
+import { teamLabel, type DraftMember, type DraftPoolPlayer } from '@/lib/draft'
 
 /** Wishlist controls, present when the viewer is a member who can keep one. */
 export type WishlistProps = {
@@ -186,7 +186,7 @@ export default function DraftPool({
                 </button>
               )}
               {owner ? (
-                <span className="text-xs text-slate-300 shrink-0">→ {owner.username}</span>
+                <span className="text-xs text-slate-300 shrink-0">→ {teamLabel(owner)}</span>
               ) : canPick ? (
                 confirming ? (
                   <div className="flex gap-1 shrink-0">

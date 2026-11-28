@@ -12,6 +12,8 @@ import {
   memberOnClock,
   moveInList,
   turnDeadline,
+  teamLabel,
+  type CaptainChoice,
   type DraftMember,
   type DraftPick,
   type DraftPoolPlayer,
@@ -34,6 +36,7 @@ export default function DraftRoomPage() {
   const [room, setRoom] = useState<DraftRoom | null>(null)
   const [members, setMembers] = useState<DraftMember[]>([])
   const [picks, setPicks] = useState<DraftPick[]>([])
+  const [captains, setCaptains] = useState<CaptainChoice[]>([])
   const [pool, setPool] = useState<DraftPoolPlayer[]>([])
   const [loadError, setLoadError] = useState('')
   const [loaded, setLoaded] = useState(false)
@@ -48,10 +51,11 @@ export default function DraftRoomPage() {
   }, [])
 
   const refresh = useCallback(async () => {
-    const [r, m, p] = await Promise.all([
+    const [r, m, p, cp] = await Promise.all([
       supabase.from('draft_rooms').select('*').eq('id', id).maybeSingle(),
       supabase.from('draft_members').select('*').eq('draft_id', id),
       supabase.from('draft_picks').select('*').eq('draft_id', id).order('pick_no'),
+      supabase.from('draft_captains').select('member_id, captain_id, vice_id, pending_captain_id, pending_vice_id, draft_members!inner(draft_id)').eq('draft_members.draft_id', id),
     ])
     if (r.error || !r.data) {
       setLoadError(r.error?.message ?? 'This draft does not exist, or you are not in it.')
@@ -61,6 +65,16 @@ export default function DraftRoomPage() {
     setRoom(r.data as DraftRoom)
     setMembers((m.data ?? []) as DraftMember[])
     setPicks((p.data ?? []) as DraftPick[])
+    const num = (v: unknown) => (v == null ? null : Number(v))
+    setCaptains(
+      ((cp.data ?? []) as Record<string, unknown>[]).map((c) => ({
+        member_id: String(c.member_id),
+        captain_id: num(c.captain_id),
+        vice_id: num(c.vice_id),
+        pending_captain_id: num(c.pending_captain_id),
+        pending_vice_id: num(c.pending_vice_id),
+      }))
+    )
     return r.data as DraftRoom
   }, [supabase, id])
 
@@ -240,6 +254,7 @@ export default function DraftRoomPage() {
       notice={notice}
       wishlist={wishlist}
       points={points}
+      captains={captains}
       secondsLeft={secondsLeft}
       sound={sound}
       actions={{
@@ -251,7 +266,7 @@ export default function DraftRoomPage() {
             if (ok && m.user_id === user.id) router.push('/dashboard')
           }),
         pick: (player) => {
-          const forWhom = onClock && me && onClock.id !== me.id ? ` for ${onClock.username}` : ''
+          const forWhom = onClock && me && onClock.id !== me.id ? ` for ${teamLabel(onClock)}` : ''
           void call('draft_make_pick', { p_draft_id: id, p_player_id: player.id, p_pick_no: picks.length }, `Picked ${player.player_name}${forWhom}`)
         },
         undo: () => void call('draft_undo_pick', { p_draft_id: id }, 'Last pick undone'),
@@ -261,6 +276,15 @@ export default function DraftRoomPage() {
           }),
         copyInvite: () => void copy(inviteText(window.location.origin, `${poolLabel(room.pool)} draft`, room.room_code, room.room_key), 'Invite'),
         copyTeams: () => void copy(draftSummaryText(room.name, members, picks, playersById), 'Teams'),
+        saveTeam: (name, emoji, colour) =>
+          void call('draft_set_team_identity', { p_draft_id: id, p_name: name || null, p_emoji: emoji || null, p_color: colour || null }, 'Team saved'),
+        saveCaptains: (captainId, viceId) =>
+          void call(
+            'draft_set_captains',
+            { p_draft_id: id, p_captain: captainId, p_vice: viceId },
+            'Captains saved. They count from the second nightly update after now.'
+          ),
+        setCaptainsEnabled: (on) => void call('draft_set_captains_enabled', { p_draft_id: id, p_on: on }, on ? 'Captains are on' : 'Captains are off'),
         replacePick: (pickNo, playerId) =>
           void call('draft_host_replace_pick', { p_draft_id: id, p_pick_no: pickNo, p_player_id: playerId }, `Pick #${pickNo + 1} changed`),
         addPlayer: (team, name, role) =>

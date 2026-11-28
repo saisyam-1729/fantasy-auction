@@ -36,6 +36,7 @@ const ORDER = [
   'fantasy_points.sql',
   'draft_extras.sql',
   'draft_admin.sql',
+  'draft_teams.sql',
   'realtime_tables.sql',
 ]
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { initials, teamColours } from '@/lib/teams'
-import { roundOf, type DraftMember, type DraftPick, type DraftPoolPlayer } from '@/lib/draft'
+import { roundOf, teamLabel, type DraftMember, type DraftPick, type DraftPoolPlayer } from '@/lib/draft'
 
 /**
  * The most recent pick, shown big like a sold lot in the auction: the player,
@@ -55,7 +55,7 @@ export default function LatestPick({
       <div className="shrink-0 text-right">
         <p className="text-[11px] uppercase tracking-wider text-slate-400">Picked by</p>
         <p className={`text-base sm:text-lg font-bold ${isMine ? 'text-emerald-200' : 'text-amber-200'}`}>
-          {isMine ? 'You' : (picker?.username ?? '?')}
+          {isMine ? 'You' : picker ? teamLabel(picker) : '?'}
         </p>
       </div>
     </div>

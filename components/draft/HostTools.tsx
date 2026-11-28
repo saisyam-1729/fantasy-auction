@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { Button, cx } from '@/components/ui'
-import type { DraftMember, DraftPick, DraftPoolPlayer, DraftRoom } from '@/lib/draft'
+import { teamLabel, type DraftMember, type DraftPick, type DraftPoolPlayer, type DraftRoom } from '@/lib/draft'
 
 export type HostActions = {
   undo: () => void
@@ -10,6 +10,7 @@ export type HostActions = {
   replacePick: (pickNo: number, playerId: number) => void
   addPlayer: (team: string, name: string, role: string | null) => void
   resetPoints: () => void
+  setCaptainsEnabled: (on: boolean) => void
 }
 
 const ROLES = ['Batter', 'WK-Batter', 'All-rounder', 'Bowler']
@@ -44,7 +45,7 @@ export default function HostTools({
   const [role, setRole] = useState('')
 
   const byId = useMemo(() => new Map(pool.map((p) => [p.id, p])), [pool])
-  const memberName = useMemo(() => new Map(members.map((m) => [m.id, m.username])), [members])
+  const memberName = useMemo(() => new Map(members.map((m) => [m.id, teamLabel(m)])), [members])
   const available = useMemo(() => {
     const taken = new Set(picks.map((p) => p.player_id))
     return pool.filter((p) => !taken.has(p.id)).sort((a, b) => a.player_name.localeCompare(b.player_name))
@@ -142,6 +143,19 @@ export default function HostTools({
                 Reset points…
               </Button>
             )}
+          </section>
+        )}
+
+        {started && (
+          <section className="space-y-2">
+            <h3 className="font-semibold text-white">Captains</h3>
+            <p className="text-xs text-slate-400">
+              Let every team pick a Captain (2× points) and Vice-captain (1.5×). Bonuses count only for points earned after each choice takes effect,
+              never backwards.
+            </p>
+            <Button size="sm" tone={room.captains_enabled ? 'danger' : 'draft'} disabled={busy} onClick={() => actions.setCaptainsEnabled(!room.captains_enabled)}>
+              {room.captains_enabled ? 'Switch captains off' : 'Switch captains on'}
+            </Button>
           </section>
         )}
 

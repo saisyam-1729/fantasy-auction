@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, cx } from '@/components/ui'
 import { formatPoints, MEDALS, pointsGain, rankMove, type Leaderboard, type LeaderboardRow } from '@/lib/fantasyPoints'
+import { captainTag, teamLabel, type CaptainChoice, type DraftMember } from '@/lib/draft'
+
+export type TeamIdentity = Pick<DraftMember, 'username' | 'team_name' | 'team_emoji' | 'team_color'>
 
 const PODIUM: Record<number, string> = {
   1: 'border-yellow-400/80 bg-gradient-to-r from-yellow-500/25 to-yellow-500/5 shadow-lg shadow-yellow-500/10',
@@ -39,13 +42,19 @@ function Gain({ value }: { value: number | null }) {
   )
 }
 
-function Players({ row }: { row: LeaderboardRow }) {
+function Players({ row, choice }: { row: LeaderboardRow; choice?: CaptainChoice }) {
   return (
     <ul className="space-y-1">
       {row.players.map((p) => (
         <li key={p.player_id} className="flex items-center gap-2 text-sm">
           <span className="min-w-0 flex-1 truncate text-slate-100">
-            {p.name} <span className="text-xs text-slate-400">{p.team}</span>
+            {p.name}
+            {captainTag(choice, p.player_id) && (
+              <span className={`ml-1.5 rounded px-1 text-[10px] font-bold text-slate-900 ${captainTag(choice, p.player_id) === 'C' ? 'bg-amber-400' : 'bg-sky-400'}`}>
+                {captainTag(choice, p.player_id)}
+              </span>
+            )}{' '}
+            <span className="text-xs text-slate-400">{p.team}</span>
           </span>
           <span className="w-12 text-right">
             <Gain value={pointsGain(p)} />
@@ -71,13 +80,26 @@ export function LeaderboardBoard({
   currentUserId,
   sync = null,
   now = null,
+  teams,
+  captains = [],
+  bonus,
 }: {
   board: Leaderboard
   currentUserId: string | null
   sync?: SyncStatus | null
   /** Current time (ms) for the staleness check; omit to skip it. */
   now?: number | null
+  /** member id -> team identity (name, emoji, colour) */
+  teams?: Map<string, TeamIdentity>
+  captains?: CaptainChoice[]
+  /** member id -> captain bonus included in their points */
+  bonus?: Map<string, number>
 }) {
+  const labelOf = (row: LeaderboardRow) => {
+    const t = teams?.get(row.member_id)
+    return t ? teamLabel(t) : row.username
+  }
+  const colourOf = (row: LeaderboardRow) => teams?.get(row.member_id)?.team_color ?? undefined
   const [open, setOpen] = useState<string | null>(null)
   const stale = Boolean(sync && now != null && now - new Date(sync.ran_at).getTime() > STALE_MS)
   const unmatched = sync?.unmatched ?? []
@@ -152,11 +174,12 @@ export function LeaderboardBoard({
                     <Move row={row} />
                   </span>
                   <span className="min-w-0">
-                    <span className={cx('block truncate font-semibold', podium ? 'text-white text-base' : 'text-slate-100 text-sm')}>
-                      {row.username}
+                    <span className={cx('block truncate font-semibold', podium ? 'text-white text-base' : 'text-slate-100 text-sm')} style={colourOf(row) ? { color: colourOf(row) } : undefined}>
+                      {labelOf(row)}
                       {isMe && <span className="ml-2 text-[10px] font-bold uppercase text-emerald-300">You</span>}
                     </span>
                     <span className="block text-[11px] text-slate-400">
+                      {teams?.get(row.member_id)?.team_name ? row.username + ' · ' : ''}
                       {row.players.length} players<span className="lg:hidden"> · tap for details</span>
                     </span>
                   </span>
@@ -168,7 +191,10 @@ export function LeaderboardBoard({
 
                 {expanded && (
                   <div className="border-t border-white/10 px-3 py-2 lg:hidden">
-                    <Players row={row} />
+                    <Players row={row} choice={captains.find((c) => c.member_id === row.member_id)} />
+                    {(bonus?.get(row.member_id) ?? 0) !== 0 && (
+                      <p className="mt-1 text-xs text-amber-200">Includes +{formatPoints(bonus!.get(row.member_id)!)} captain bonus</p>
+                    )}
                   </div>
                 )}
               </li>
@@ -183,8 +209,8 @@ export function LeaderboardBoard({
       {detail && (
         <Card className="hidden lg:block lg:sticky lg:top-20 lg:self-start">
           <div className="mb-3 flex items-baseline justify-between gap-2">
-            <h2 className="truncate text-lg font-bold text-white">
-              {detail.username}
+            <h2 className="truncate text-lg font-bold text-white" style={colourOf(detail) ? { color: colourOf(detail) } : undefined}>
+              {labelOf(detail)}
               {detail.user_id === currentUserId && <span className="ml-2 text-xs font-bold uppercase text-emerald-300">You</span>}
             </h2>
             <span className="shrink-0 text-sm text-slate-300">
@@ -195,7 +221,10 @@ export function LeaderboardBoard({
             <span className="w-12 text-right">Today</span>
             <span className="w-10 text-right">Total</span>
           </div>
-          <Players row={detail} />
+          <Players row={detail} choice={captains.find((c) => c.member_id === detail.member_id)} />
+          {(bonus?.get(detail.member_id) ?? 0) !== 0 && (
+            <p className="mt-3 text-xs text-amber-200">Includes +{formatPoints(bonus!.get(detail.member_id)!)} captain bonus</p>
+          )}
         </Card>
       )}
     </div>
@@ -208,6 +237,9 @@ export default function LeaderboardView({ draftId, currentUserId, pool }: { draf
   const [board, setBoard] = useState<Leaderboard | null>(null)
   const [sync, setSync] = useState<SyncStatus | null>(null)
   const [now, setNow] = useState<number | null>(null)
+  const [teams, setTeams] = useState<Map<string, TeamIdentity>>(new Map())
+  const [captains, setCaptains] = useState<CaptainChoice[]>([])
+  const [bonus, setBonus] = useState<Map<string, number>>(new Map())
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -217,6 +249,32 @@ export default function LeaderboardView({ draftId, currentUserId, pool }: { draf
       if (err) setError(err.message)
       else setBoard(data as Leaderboard)
       setNow(Date.now())
+    })
+    return () => {
+      live = false
+    }
+  }, [supabase, draftId])
+
+  useEffect(() => {
+    let live = true
+    void Promise.all([
+      supabase.from('draft_members').select('id, username, team_name, team_emoji, team_color').eq('draft_id', draftId),
+      supabase.from('draft_captains').select('member_id, captain_id, vice_id, pending_captain_id, pending_vice_id, draft_members!inner(draft_id)').eq('draft_members.draft_id', draftId),
+      supabase.from('draft_member_bonus').select('member_id, points').eq('draft_id', draftId),
+    ]).then(([m, c, b]) => {
+      if (!live) return
+      setTeams(new Map(((m.data ?? []) as (TeamIdentity & { id: string })[]).map((x) => [x.id, x])))
+      const n = (v: unknown) => (v == null ? null : Number(v))
+      setCaptains(
+        ((c.data ?? []) as Record<string, unknown>[]).map((x) => ({
+          member_id: String(x.member_id),
+          captain_id: n(x.captain_id),
+          vice_id: n(x.vice_id),
+          pending_captain_id: n(x.pending_captain_id),
+          pending_vice_id: n(x.pending_vice_id),
+        }))
+      )
+      setBonus(new Map(((b.data ?? []) as { member_id: string; points: number }[]).map((x) => [x.member_id, Number(x.points)])))
     })
     return () => {
       live = false
@@ -236,5 +294,5 @@ export default function LeaderboardView({ draftId, currentUserId, pool }: { draf
 
   if (error) return <p className="text-red-200 text-sm">{error}</p>
   if (!board) return <p className="text-slate-300 text-sm">Loading leaderboard…</p>
-  return <LeaderboardBoard board={board} currentUserId={currentUserId} sync={sync} now={now} />
+  return <LeaderboardBoard board={board} currentUserId={currentUserId} sync={sync} now={now} teams={teams} captains={captains} bonus={bonus} />
 }

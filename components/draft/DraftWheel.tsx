@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ordinal, type DraftMember, type DraftRoom } from '@/lib/draft'
+import { ordinal, teamLabel, type DraftMember, type DraftRoom } from '@/lib/draft'
 
 const COLOURS = ['#10b981', '#f59e0b', '#6366f1', '#ef4444', '#06b6d4', '#a855f7', '#84cc16', '#ec4899', '#f97316', '#3b82f6']
 const SPIN_MS = 3600
@@ -65,7 +65,8 @@ export default function DraftWheel({ members, lastSpin }: { members: DraftMember
           )}
           {segments.map((m, i) => {
             const mid = i * slice + slice / 2
-            const name = m.username.length > 11 ? m.username.slice(0, 10) + '…' : m.username
+            const full = teamLabel(m)
+            const name = full.length > 11 ? full.slice(0, 10) + '…' : full
             return (
               <text
                 key={m.id + 't'}
@@ -90,11 +91,11 @@ export default function DraftWheel({ members, lastSpin }: { members: DraftMember
         {chosen && spin && (
           <div key={spin.seq} className={fresh ? 'draft-reveal' : ''} style={fresh ? { animationDelay: `${SPIN_MS}ms` } : undefined}>
             <p className="text-lg font-bold text-white">
-              {chosen.username} picks {ordinal(spin.position)}
+              {teamLabel(chosen)} picks {ordinal(spin.position)}
             </p>
             {lastMember && (
               <p className="text-sm text-slate-300">
-                {lastMember.username} is the last one left and picks {ordinal(spin.position + 1)}
+                {teamLabel(lastMember)} is the last one left and picks {ordinal(spin.position + 1)}
               </p>
             )}
           </div>

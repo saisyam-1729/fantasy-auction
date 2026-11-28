@@ -23,7 +23,7 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
   }
   try {
     await q('begin')
-    for (const f of ['draft.sql', 'fantasy_points.sql', 'draft_extras.sql']) await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', f), 'utf8'))
+    for (const f of ['draft.sql', 'fantasy_points.sql', 'draft_extras.sql', 'draft_teams.sql']) await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', f), 'utf8'))
 
     const pool = 'TESTFP_' + u().slice(0, 8)
     const P = []

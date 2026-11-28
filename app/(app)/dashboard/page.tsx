@@ -6,7 +6,9 @@ import { useSession } from '@/components/shell/AppShell'
 import { Badge, Button, Card, PageHeader } from '@/components/ui'
 import { EVENTS, eventForInventory, poolLabel } from '@/lib/events'
 import { MEDALS, formatPoints, pointsGain, rankMove, type Leaderboard } from '@/lib/fantasyPoints'
-import type { DraftStatus } from '@/lib/draft'
+import { teamLabel, type DraftStatus } from '@/lib/draft'
+import { buildRecap, type Recap } from '@/lib/recap'
+import RecapCard from '@/components/recap/RecapCard'
 import { useRouter } from 'next/navigation'
 
 type RoomItem = {
@@ -21,6 +23,7 @@ type RoomItem = {
 }
 
 type Standing = { draftId: string; event: string; name: string; rank: number; teams: number; points: number; move: number | null; gain: number | null }
+type RecapItem = { draftId: string; event: string; recap: Recap; accent: string | undefined }
 
 const DRAFT_STATUS: Record<DraftStatus, [string, RoomItem['tone']]> = {
   LOBBY: ['Lobby', 'yellow'],
@@ -34,6 +37,7 @@ export default function HomePage() {
   const { supabase, user, username } = useSession()
   const [rooms, setRooms] = useState<RoomItem[] | null>(null)
   const [standings, setStandings] = useState<Standing[] | null>(null)
+  const [recaps, setRecaps] = useState<RecapItem[]>([])
 
   useEffect(() => {
     let live = true
@@ -62,25 +66,43 @@ export default function HomePage() {
       setRooms(items)
 
       const started = (drafts.data ?? []).filter((d) => d.status !== 'LOBBY')
-      const boards = await Promise.all(
-        started.map(async (d) => {
-          const { data } = await supabase.rpc('draft_leaderboard', { p_draft_id: d.id })
-          const board = data as Leaderboard | null
-          const me = board?.rows.find((r) => r.user_id === user.id)
-          if (!board || !me) return null
-          return {
-            draftId: d.id,
-            event: poolLabel(d.pool),
-            name: d.name,
-            rank: me.rank,
-            teams: board.rows.length,
-            points: Number(me.points),
-            move: rankMove(me),
-            gain: pointsGain(me),
-          } satisfies Standing
+      const [boards, teamRows] = await Promise.all([
+        Promise.all(
+          started.map(async (d) => {
+            const { data } = await supabase.rpc('draft_leaderboard', { p_draft_id: d.id })
+            return { d, board: data as Leaderboard | null }
+          })
+        ),
+        started.length
+          ? supabase.from('draft_members').select('id, username, team_name, team_emoji, team_color').in('draft_id', started.map((d) => d.id))
+          : Promise.resolve({ data: [] }),
+      ])
+      if (!live) return
+      const identity = new Map(((teamRows.data ?? []) as { id: string; username: string; team_name: string | null; team_emoji: string | null; team_color: string | null }[]).map((t) => [t.id, t]))
+      const label = (row: { member_id: string; username: string }) => {
+        const t = identity.get(row.member_id)
+        return t ? teamLabel(t) : row.username
+      }
+      const standing: Standing[] = []
+      const recapItems: RecapItem[] = []
+      for (const { d, board } of boards) {
+        const me = board?.rows.find((r) => r.user_id === user.id)
+        if (!board || !me) continue
+        standing.push({
+          draftId: d.id,
+          event: poolLabel(d.pool),
+          name: d.name,
+          rank: me.rank,
+          teams: board.rows.length,
+          points: Number(me.points),
+          move: rankMove(me),
+          gain: pointsGain(me),
         })
-      )
-      if (live) setStandings(boards.filter((b): b is Standing => b !== null))
+        const recap = buildRecap(board, user.id, label)
+        if (recap) recapItems.push({ draftId: d.id, event: poolLabel(d.pool), recap, accent: identity.get(me.member_id)?.team_color ?? undefined })
+      }
+      setStandings(standing)
+      setRecaps(recapItems)
     })()
     return () => {
       live = false
@@ -103,6 +125,14 @@ export default function HomePage() {
           </>
         }
       />
+
+      {recaps.length > 0 && (
+        <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {recaps.map((r) => (
+            <RecapCard key={r.draftId} recap={r.recap} event={r.event} href={`/leaderboard/${r.draftId}`} accent={r.accent} />
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2" as="section">

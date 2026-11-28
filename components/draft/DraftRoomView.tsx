@@ -6,9 +6,13 @@ import DraftWheel from '@/components/draft/DraftWheel'
 import DraftPool, { type WishlistProps } from '@/components/draft/DraftPool'
 import LatestPick from '@/components/draft/LatestPick'
 import HostTools from '@/components/draft/HostTools'
+import TeamEditor from '@/components/draft/TeamEditor'
+import CaptainPanel from '@/components/draft/CaptainPanel'
 import { Badge, Button, Card, PageHeader, Segmented, cx } from '@/components/ui'
 import { poolLabel } from '@/lib/events'
 import {
+  captainTag,
+  teamLabel,
   inDraftOrder,
   lobbyCheck,
   memberOnClock,
@@ -16,6 +20,7 @@ import {
   roundOf,
   totalPicks,
   upcomingPicks,
+  type CaptainChoice,
   type DraftMember,
   type DraftPick,
   type DraftPoolPlayer,
@@ -32,6 +37,9 @@ export type DraftActions = {
   deleteDraft: () => void
   copyInvite: () => void
   copyTeams: () => void
+  saveTeam: (name: string, emoji: string, colour: string) => void
+  saveCaptains: (captainId: number, viceId: number | null) => void
+  setCaptainsEnabled: (on: boolean) => void
   replacePick: (pickNo: number, playerId: number) => void
   addPlayer: (team: string, name: string, role: string | null) => void
   resetPoints: () => void
@@ -54,6 +62,8 @@ export type DraftRoomViewProps = {
   secondsLeft?: number | null
   /** Turn chime on/off. */
   sound?: { enabled: boolean; toggle: () => void }
+  /** Captain choices of every team in this draft (visible to all members). */
+  captains?: CaptainChoice[]
 }
 
 type Tab = 'pool' | 'teams' | 'log'
@@ -66,9 +76,10 @@ type Tab = 'pool' | 'teams' | 'log'
  * Laptop (lg): the pool sits beside the teams; Teams and Picks share the right side.
  * Wide (2xl): pool, teams and the pick feed are all visible at once.
  */
-export default function DraftRoomView({ room, members, picks, pool, userId, busy, notice, actions, wishlist, points, secondsLeft = null, sound }: DraftRoomViewProps) {
+export default function DraftRoomView({ room, members, picks, pool, userId, busy, notice, actions, wishlist, points, secondsLeft = null, sound, captains = [] }: DraftRoomViewProps) {
   const [tab, setTab] = useState<Tab>('pool')
   const [rightTab, setRightTab] = useState<'teams' | 'log'>('teams')
+  const [panel, setPanel] = useState<'team' | 'captains' | null>(null)
 
   const ordered = useMemo(() => inDraftOrder(members), [members])
   const me = members.find((m) => m.user_id === userId) ?? null
@@ -113,7 +124,7 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
       subtitle={
         <>
           <span className="font-mono">{room.room_code}</span> · {n}/{room.max_members} teams · {room.picks_per_team} picks each
-          {me ? ` · you are ${me.username}` : ''}
+          {me ? ` · you are ${teamLabel(me)}` : ''}
           {room.status === 'LOBBY' && (
             <>
               {' '}
@@ -124,6 +135,16 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
       }
       actions={
         <>
+          {me && (
+            <Button size="sm" onClick={() => setPanel(panel === 'team' ? null : 'team')} aria-expanded={panel === 'team'}>
+              🎨 My team
+            </Button>
+          )}
+          {me && room.captains_enabled && room.status !== 'LOBBY' && (
+            <Button size="sm" onClick={() => setPanel(panel === 'captains' ? null : 'captains')} aria-expanded={panel === 'captains'}>
+              ⭐ Captains
+            </Button>
+          )}
           {sound && room.status !== 'DONE' && (
             <Button size="sm" onClick={sound.toggle} aria-pressed={sound.enabled} title="Play a sound when it is your turn">
               {sound.enabled ? '🔔 Sound on' : '🔕 Sound off'}
@@ -157,6 +178,41 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
     </div>
   )
 
+  const myPlayers = me ? picks.filter((p) => p.member_id === me.id).map((p) => playersById.get(p.player_id)).filter((p): p is DraftPoolPlayer => Boolean(p)) : []
+  const editorPanel =
+    me && panel ? (
+      <Card className="mb-4 max-w-xl">
+        {panel === 'team' ? (
+          <>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">My team</h2>
+            <TeamEditor
+              key={me.id + (me.team_name ?? '') + (me.team_emoji ?? '') + (me.team_color ?? '')}
+              member={me}
+              busy={busy}
+              onSave={(name, emoji, colour) => {
+                actions.saveTeam(name, emoji, colour)
+                setPanel(null)
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Captains</h2>
+            <CaptainPanel
+              key={me.id + myPlayers.length}
+              players={myPlayers}
+              choice={captains.find((c) => c.member_id === me.id)}
+              busy={busy}
+              onSave={(c, v) => {
+                actions.saveCaptains(c, v)
+                setPanel(null)
+              }}
+            />
+          </>
+        )}
+      </Card>
+    ) : null
+
   const hostTools = isHost && (
     <HostTools
       room={room}
@@ -171,6 +227,7 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
         replacePick: actions.replacePick,
         addPlayer: actions.addPlayer,
         resetPoints: actions.resetPoints,
+        setCaptainsEnabled: actions.setCaptainsEnabled,
       }}
     />
   )
@@ -181,6 +238,7 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
       <div>
         {header}
         {noticeBar}
+        {editorPanel}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <Card>
             <h2 className="text-lg font-bold text-white mb-1">Draft order</h2>
@@ -217,7 +275,8 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
                 <li key={m.id} className="flex items-center gap-3 rounded-xl bg-slate-900/40 border border-slate-700 px-3 py-2">
                   <span className={cx('w-9 text-center text-sm font-bold', m.order_pos ? 'text-emerald-300' : 'text-slate-500')}>{m.order_pos ? ordinal(m.order_pos) : '—'}</span>
                   <span className="flex-1 truncate text-white text-sm">
-                    {m.username}
+                    <span style={m.team_color ? { color: m.team_color } : undefined}>{teamLabel(m)}</span>
+                    {m.team_name && <span className="text-xs text-slate-500"> · {m.username}</span>}
                     {m.user_id === userId && <span className="text-slate-400"> (you)</span>}
                   </span>
                   {m.user_id === room.owner_id && <span className="text-[10px] font-bold uppercase text-yellow-300">Host</span>}
@@ -251,7 +310,7 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
             <p className="text-xs uppercase tracking-wide text-slate-300">
               Round {round} · pick {pickInRound} of {n} · overall {pickNo + 1} of {total}
             </p>
-            <p className="text-xl font-bold text-white">{myTurn ? 'Your pick!' : `${onClock.username} is picking`}</p>
+            <p className="text-xl font-bold text-white">{myTurn ? 'Your pick!' : `${teamLabel(onClock)} is picking`}</p>
           </div>
           {secondsLeft != null && (
             <span
@@ -281,7 +340,7 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
             <span className="text-xs text-slate-400 self-center shrink-0">Next:</span>
             {next.map((x) => (
               <span key={x.pickNo} className={cx('shrink-0 text-xs px-2 py-1 rounded-lg', x.member?.id === me?.id ? 'bg-emerald-500/30 text-emerald-100' : 'bg-slate-800/70 text-slate-200')}>
-                {x.member?.username ?? '?'}
+                {x.member ? teamLabel(x.member) : '?'}
               </span>
             ))}
           </div>
@@ -308,7 +367,7 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
       pickedBy={pickedBy}
       latestPlayerId={lastPick?.player_id ?? null}
       canPick={canPick}
-      pickLabel={myTurn ? 'Pick' : `Pick for ${onClock?.username ?? ''}`}
+      pickLabel={myTurn ? 'Pick' : `Pick for ${onClock ? teamLabel(onClock) : ''}`}
       busy={busy}
       onPick={actions.pick}
       wishlist={wishlist}
@@ -321,6 +380,7 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
       {ordered.map((m) => {
         const mine = picks.filter((p) => p.member_id === m.id)
         const justPicked = lastPick?.member_id === m.id
+        const choice = captains.find((c) => c.member_id === m.id)
         return (
           <div
             key={m.id}
@@ -328,10 +388,11 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
               'rounded-xl border-2 p-3',
               onClock?.id === m.id ? 'border-emerald-400 bg-emerald-500/10' : justPicked ? 'border-amber-400 bg-amber-500/10' : 'border-slate-700 bg-slate-900/40'
             )}
+            style={m.team_color && onClock?.id !== m.id && !justPicked ? { borderColor: m.team_color + '99' } : undefined}
           >
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="font-semibold text-white truncate">
-                {m.order_pos}. {m.username}
+                {m.order_pos}. {teamLabel(m)}
                 {m.user_id === userId && <span className="text-slate-400 font-normal"> (you)</span>}
               </span>
               {onClock?.id === m.id ? (
@@ -355,7 +416,14 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
                       key={p.id}
                       className={cx('text-sm flex justify-between gap-2 rounded px-1 -mx-1', p.id === lastPick?.id ? 'bg-amber-500/20 text-amber-100 font-semibold' : 'text-slate-100')}
                     >
-                      <span className="truncate">{pl?.player_name ?? '?'}</span>
+                      <span className="truncate">
+                        {pl?.player_name ?? '?'}
+                        {room.captains_enabled && captainTag(choice, p.player_id) && (
+                          <span className={cx('ml-1.5 rounded px-1 text-[10px] font-bold', captainTag(choice, p.player_id) === 'C' ? 'bg-amber-400 text-slate-900' : 'bg-sky-400 text-slate-900')}>
+                            {captainTag(choice, p.player_id)}
+                          </span>
+                        )}
+                      </span>
                       <span className="text-xs text-slate-400 shrink-0 truncate max-w-[45%]">{pl?.team}</span>
                     </li>
                   )
@@ -383,7 +451,7 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
             <span className="min-w-0 flex-1">
               <span className="block truncate text-white">{pl?.player_name ?? '?'}</span>
               <span className="block truncate text-xs text-slate-400">
-                <span className="text-slate-200">{who?.username}</span> · {pl?.team}
+                <span className="text-slate-200">{who ? teamLabel(who) : '?'}</span> · {pl?.team}
               </span>
             </span>
           </li>
@@ -396,6 +464,7 @@ export default function DraftRoomView({ room, members, picks, pool, userId, busy
     <div>
       {header}
       {noticeBar}
+      {editorPanel}
 
       <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-2 [&>*]:min-w-0">
         {lastPick ? (

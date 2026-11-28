@@ -21,7 +21,7 @@ const rec = (n, ok, d) => { results.push(ok); console.log((ok ? 'PASS ' : 'FAIL 
   }
   try {
     await q('begin')
-    for (const f of ['draft.sql', 'fantasy_points.sql', 'draft_extras.sql', 'draft_admin.sql']) await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', f), 'utf8'))
+    for (const f of ['draft.sql', 'fantasy_points.sql', 'draft_extras.sql', 'draft_admin.sql', 'draft_teams.sql']) await q(fs.readFileSync(path.join(__dirname, '..', '..', 'supabase', f), 'utf8'))
     const pool = 'TESTA_' + u().slice(0, 8)
     const P = []
     for (let i = 0; i < 8; i++) P.push(Number((await q(`insert into draft_pool_players(pool,sort_no,team,player_name) values($1,$2::int,'T','P'||$2::text) returning id`, [pool, i])).rows[0].id))
